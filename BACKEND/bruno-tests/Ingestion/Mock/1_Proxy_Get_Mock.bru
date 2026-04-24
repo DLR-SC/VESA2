@@ -1,0 +1,15 @@
+meta {
+  name: 1. Proxy - GET Mock Fixture
+  type: http
+  seq: 1
+}
+
+get {
+  url: http://localhost:5000/pangaea/records?mock=true
+  body: none
+  auth: none
+}
+
+query {
+  mock: true
+}

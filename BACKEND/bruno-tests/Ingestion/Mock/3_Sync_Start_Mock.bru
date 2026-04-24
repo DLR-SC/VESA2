@@ -1,0 +1,20 @@
+meta {
+  name: 3. Sync - Start Mock
+  type: http
+  seq: 3
+}
+
+post {
+  url: http://localhost:5000/sync/start
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "target_url": "http://localhost:5000/pangaea/records?mock=true",
+    "dataset_id": "pangaea-mock",
+    "batch_size": 1,
+    "total_limit": 1
+  }
+}

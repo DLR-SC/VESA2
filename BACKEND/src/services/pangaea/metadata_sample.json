@@ -1,0 +1,565 @@
+
+  {"md:citation": {
+    "md:author": [
+      {
+        "md:lastName": "Auffret",
+        "md:firstName": "Gérard A",
+        "id": "dataset.author10707"
+      },
+      {
+        "md:lastName": "Zaragosi",
+        "md:firstName": "Sebastien",
+        "md:eMail": "sebastien.zaragosi@u-bordeaux.fr",
+        "id": "dataset.author26372"
+      },
+      {
+        "md:lastName": "Dennielou",
+        "md:firstName": "Bernard",
+        "md:eMail": "Bernard.Dennielou@ifremer.fr",
+        "md:orcid": "0000-0002-9528-2746",
+        "id": "dataset.author21809"
+      },
+      {
+        "md:lastName": "Cortijo",
+        "md:firstName": "Elsa",
+        "md:eMail": "cortijo@lsce.cnrs-gif.fr",
+        "id": "dataset.author734"
+      },
+      {
+        "md:lastName": "Van Rooij",
+        "md:firstName": "David",
+        "md:eMail": "david.vanrooij@ugent.be",
+        "md:orcid": "0000-0003-3633-3344",
+        "id": "dataset.author20088"
+      },
+      {
+        "md:lastName": "Grousset",
+        "md:firstName": "Francis E",
+        "md:eMail": "f.grousset@epoc.u-bordeaux1.fr",
+        "id": "dataset.author867"
+      },
+      {
+        "md:lastName": "Pujol",
+        "md:firstName": "Claude",
+        "md:eMail": "pujol@geocean.u-bordeaux.fr",
+        "id": "dataset.author21739"
+      },
+      {
+        "md:lastName": "Eynaud",
+        "md:firstName": "Frédérique",
+        "md:eMail": "frederique.eynaud@u-bordeaux.fr",
+        "md:orcid": "0000-0003-1283-7425",
+        "id": "dataset.author21824"
+      },
+      {
+        "md:lastName": "Siegert",
+        "md:firstName": "Martin J",
+        "md:orcid": "0000-0002-0090-4806",
+        "id": "dataset.author23602"
+      }
+    ],
+    "md:year": 2002,
+    "md:title": "Geochemistry and age models of sediments from the Celtic margin",
+    "md:type": {
+      "#text": "dataset publication series",
+      "id": "dataset.reftype10",
+      "includeInCitation": "true"
+    },
+    "md:URI": "https://doi.org/10.1594/PANGAEA.66871",
+    "md:dateTime": "2002-04-06T10:12:25",
+    "md:supplementTo": {
+      "md:author": [
+        {
+          "md:lastName": "Auffret",
+          "md:firstName": "Gérard A",
+          "id": "ref24136.author10707"
+        },
+        {
+          "md:lastName": "Zaragosi",
+          "md:firstName": "Sebastien",
+          "md:eMail": "sebastien.zaragosi@u-bordeaux.fr",
+          "id": "ref24136.author26372"
+        },
+        {
+          "md:lastName": "Dennielou",
+          "md:firstName": "Bernard",
+          "md:eMail": "Bernard.Dennielou@ifremer.fr",
+          "md:orcid": "0000-0002-9528-2746",
+          "id": "ref24136.author21809"
+        },
+        {
+          "md:lastName": "Cortijo",
+          "md:firstName": "Elsa",
+          "md:eMail": "cortijo@lsce.cnrs-gif.fr",
+          "id": "ref24136.author734"
+        },
+        {
+          "md:lastName": "Van Rooij",
+          "md:firstName": "David",
+          "md:eMail": "david.vanrooij@ugent.be",
+          "md:orcid": "0000-0003-3633-3344",
+          "id": "ref24136.author20088"
+        },
+        {
+          "md:lastName": "Grousset",
+          "md:firstName": "Francis E",
+          "md:eMail": "f.grousset@epoc.u-bordeaux1.fr",
+          "id": "ref24136.author867"
+        },
+        {
+          "md:lastName": "Pujol",
+          "md:firstName": "Claude",
+          "md:eMail": "pujol@geocean.u-bordeaux.fr",
+          "id": "ref24136.author21739"
+        },
+        {
+          "md:lastName": "Eynaud",
+          "md:firstName": "Frédérique",
+          "md:eMail": "frederique.eynaud@u-bordeaux.fr",
+          "md:orcid": "0000-0003-1283-7425",
+          "id": "ref24136.author21824"
+        },
+        {
+          "md:lastName": "Siegert",
+          "md:firstName": "Martin J",
+          "md:orcid": "0000-0002-0090-4806",
+          "id": "ref24136.author23602"
+        }
+      ],
+      "md:year": 2002,
+      "md:title": "Terrigenous fluxes at the Celtic Margin during the last glacial cycle",
+      "md:source": {
+        "#text": "Marine Geology",
+        "id": "ref24136.journal10819",
+        "relatedTermIds": "33974,34022",
+        "type": "journal"
+      },
+      "md:volume": "188(1-2)",
+      "md:URI": "https://doi.org/10.1016/S0025-3227(02)00276-1",
+      "md:pages": "79-108",
+      "id": "ref24136"
+    },
+    "id": "dataset66871"
+  },
+  "md:abstract": "The sedimentary sections of three cores from the Celtic margin provide high-resolution records of the terrigenous fluxes during the last glacial cycle. A total of 21 14C AMS dates allow us to define age models with a resolution better than 100 yr during critical periods such as Heinrich events 1 and 2. Maximum sedimentary fluxes occurred at the Meriadzek Terrace site during the Last Glacial Maximum (LGM). Detailed X-ray imagery of core MD95-2002 from the Meriadzek Terrace shows no sedimentary structures suggestive of either deposition from high-density turbidity currents or significant erosion. Two paroxysmal terrigenous flux episodes have been identified. The first occurred after the deposition of Heinrich event 2 Canadian ice-rafted debris (IRD) and includes IRD from European sources. We suggest that the second represents an episode of deposition from turbid plumes, which precedes IRD deposition associated with Heinrich event 1. At the end of marine isotopic stage 2 (MIS 2) and the beginning of MIS 1 the highest fluxes are recorded on the Whittard Ridge where they correspond to deposition from turbidity current overflows. Canadian icebergs have rafted debris at the Celtic margin during Heinrich events 1, 2, 4 and 5. The high-resolution records of Heinrich events 1 and 2 show that in both cases the arrival of the Canadian icebergs was preceded by a European ice rafting precursor event, which took place about 1–1.5 kyr before. Two rafting episodes of European IRD also occurred immediately after Heinrich event 2 and just before Heinrich event 1. The terrigenous fluxes recorded in core MD95-2002 during the LGM are the highest reported at hemipelagic sites from the northwestern European margin. The magnitude of the Canadian IRD fluxes at Meriadzek Terrace is similar to those from oceanic sites.",   
+  "md:extent": {
+    "md:geographic": {
+      "md:westBoundLongitude": -12.595500000000015,
+      "md:eastBoundLongitude": -8.533833333333348,
+      "md:southBoundLatitude": 46.9105,
+      "md:northBoundLatitude": 49.1715,
+      "md:meanLongitude": -9.930791666666664,
+      "md:meanLatitude": 47.7465
+    },
+    "md:temporal": {
+      "md:minDateTime": "1995-05-30T00:00:00",
+      "md:maxDateTime": "1995-05-30T00:00:00"
+    },
+    "md:topoType": {
+      "#text": "vertical profile",
+      "id": "topotype3"
+    }
+  },
+  "md:project": {
+    "md:label": "IMAGES",
+    "md:name": "International Marine Global Change Study",
+    "md:institution": {
+      "md:name": "MARUM - Center for Marine Environmental Sciences, University Bremen",
+      "md:optionalName": "MARUM",
+      "md:URI": "http://www.marum.de/",
+      "md:ROR": "https://ror.org/04ers2y35",
+      "id": "project3001.inst277"
+    },
+    "id": "project3001",
+    "type": "International"
+  },
+  "md:event": [
+    {
+      "md:label": "CH-NKS12",
+      "md:latitude": 49.1715,
+      "md:longitude": -12.5955,
+      "md:elevation": -1190,
+      "md:attribute": {
+        "#text": "7 m",
+        "attid": "19163",
+        "name": "Recovery"
+      },
+      "md:location": {
+        "md:name": "Celtic Shelf",
+        "id": "event2627397.term21503"
+      },
+      "md:method": {
+        "md:name": "Piston corer",
+        "md:optionalName": "PC",
+        "id": "event2627397.method10655"
+      },
+      "id": "event2627397"
+    },
+    {
+      "md:label": "MD95-2002",
+      "md:optionalLabel": "MD952002",
+      "md:latitude": 47.452,
+      "md:longitude": -8.5338333333333,
+      "md:elevation": -2174,
+      "md:dateTime": "1995-05-30T00:00:00",
+      "md:attribute": {
+        "#text": "30 m",
+        "attid": "19163",
+        "name": "Recovery"
+      },
+      "md:location": {
+        "md:name": "Meriadzec",
+        "id": "event45175.term20922"
+      },
+      "md:campaign": {
+        "md:name": "MD101",
+        "md:optionalName": "IMAGES I",
+        "md:URI": "https://doi.org/10.17600/95200110",
+        "md:chiefScientist": "Labeyrie, Laurent D",
+        "md:start": "1995-05-29",
+        "md:end": "1995-07-11",
+        "md:attribute": [
+          {
+            "#text": "Brest, France",
+            "attid": "2053",
+            "name": "Start location"
+          },
+          {
+            "#text": "Marseille, France",
+            "attid": "2054",
+            "name": "End location"
+          }
+        ],
+        "id": "event45175.campaign958"
+      },
+      "md:basis": {
+        "md:name": "Marion Dufresne (1995)",
+        "md:URI": "https://en.wikipedia.org/wiki/Marion_Dufresne_(1994)",
+        "md:callSign": "FNIN",
+        "md:IMOnumber": 9050814,
+        "id": "event45175.basis94"
+      },
+      "md:method": {
+        "md:name": "Calypso Corer",
+        "md:optionalName": "CALYPSO",
+        "id": "event45175.method10861"
+      },
+      "md:comment": "XX Sections, OK",
+      "id": "event45175"
+    },
+    {
+      "md:label": "NO-MKS03",
+      "md:latitude": 46.9105,
+      "md:longitude": -10.06,
+      "md:elevation": -4540,
+      "md:attribute": {
+        "#text": "5 m",
+        "attid": "19163",
+        "name": "Recovery"
+      },
+      "md:location": {
+        "md:name": "Celtic Shelf",
+        "id": "event2627398.term21503"
+      },
+      "md:method": {
+        "md:name": "Piston corer",
+        "md:optionalName": "PC",
+        "id": "event2627398.method10655"
+      },
+      "id": "event2627398"
+    }
+  ],
+  "md:size": {
+    "#text": 4,
+    "unit": "datasets"
+  },
+  "md:license": {
+    "md:label": "CC-BY-3.0",
+    "md:name": "Creative Commons Attribution 3.0 Unported",
+    "md:URI": "https://creativecommons.org/licenses/by/3.0/",
+    "id": "license101"
+  },
+  "md:additionalSearchableContent": "Age, comment | Comm | Strontium | Sr | Strontium-87/Strontium-86 ratio | 87Sr/86Sr | Strontium-87/Strontium-86 ratio, error | 87Sr/86Sr e | Neodymium | Nd | Neodymium-143/Neodymium-144 ratio | 143Nd/144Nd | Neodymium-143/Neodymium-144 ratio, error | 143Nd/144Nd e | ε-Neodymium (0) | ε-Nd(0) | Carbonate, detritic/terrigenic | Carb detr | corrected depth | Depth, composite | Depth comp | corrected after Stuiver et al. (1998) for ages younger than 20.7 ka and Bard (1998) for ages between 20.7 and 36 ka | Age, dated | Age dated | Age, 14C calibrated | Calendar age | Cal age | Sedimentation rate | SR | Calculated | Age model | isotopic event and Heinrich Layers | Datum level | DL",
+  "md:keywords": {
+    "md:techKeyword": [
+      {
+        "#text": "supplement",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "citable",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "IMAGES",
+        "id": "keywords.term1",
+        "type": "fromDatabase"
+      },
+      {
+        "#text": "imagesresults",
+        "id": "keywords.term89",
+        "type": "fromDatabase"
+      },
+      {
+        "#text": "method415",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "method50",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param14698",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param15174",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param1666",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param18576",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param2",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param2270",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param28423",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param49332",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param5506",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param6",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param6099",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param643",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param687",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param7",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "param81",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "pi10707",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "author10707",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "author20088",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "author21739",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "author21809",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "author21824",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "author23602",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "author26372",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "author734",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "author867",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "basis94",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "campaign958",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "event2627397",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "event2627398",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "event45175",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "geocode1599",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "geocode1600",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "geocode1601",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "geocode8128",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "inst277",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "journal10819",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "license101",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "method10655",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "method10861",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "project3001",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "ref24136",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "term1",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "term20922",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "term21503",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "term89",
+        "type": "autoGenerated"
+      },
+      {
+        "#text": "topotype3",
+        "type": "autoGenerated"
+      }
+    ]
+  },
+  "md:technicalInfo": {
+    "md:entry": [
+      {
+        "key": "xmlLastModified",
+        "value": "2024-07-20T06:12:31Z"
+      },
+      {
+        "key": "lastModified",
+        "value": "2015-04-12T19:44:43"
+      },
+      {
+        "key": "filename",
+        "value": "Auffret-etal_2002"
+      },
+      {
+        "key": "mimeType",
+        "value": "application/zip"
+      },
+      {
+        "key": "status",
+        "value": "published"
+      },
+      {
+        "key": "status_num",
+        "value": "4"
+      },
+      {
+        "key": "DOIRegistryStatus",
+        "value": "registered"
+      },
+      {
+        "key": "DOIRegistryStatus_num",
+        "value": "4"
+      },
+      {
+        "key": "DOIRegistrationDate",
+        "value": "2005-04-01T04:01:45"
+      },
+      {
+        "key": "hierarchyLevel",
+        "value": "parent"
+      },
+      {
+        "key": "collectionType",
+        "value": "publication series"
+      },
+      {
+        "key": "collectionType_num",
+        "value": "4"
+      },
+      {
+        "key": "collectionChilds",
+        "value": "D758961,D758962,D758964,D758965"
+      },
+      {
+        "key": "loginOption",
+        "value": "unrestricted"
+      },
+      {
+        "key": "loginOption_num",
+        "value": "1"
+      }
+    ]
+  },
+  "xmlns:md": "http://www.pangaea.de/MetaData",
+  "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+  "xsi:schemaLocation": "http://www.pangaea.de/MetaData http://ws.pangaea.de/schemas/pangaea/MetaData.xsd",
+  "version": "2024-07-19"
+}

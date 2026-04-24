@@ -1,0 +1,17 @@
+meta {
+  name: Run Harvester
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://localhost:5000/pangaea-harvester/run
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "limit": 100
+  }
+}

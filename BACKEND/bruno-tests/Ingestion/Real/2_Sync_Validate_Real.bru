@@ -1,0 +1,17 @@
+meta {
+  name: 2. Sync - Validate Live Data
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://localhost:5000/sync/validate
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "target_url": "http://localhost:5000/pangaea/records"
+  }
+}
