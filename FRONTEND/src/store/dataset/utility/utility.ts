@@ -168,49 +168,47 @@ export const getDatasetID = (dataset: IDataset[]): IDatasetID[] => {
   return dataset.map((item) => item.id);
 };
 
-/**Utility function to process author data fopr node link diagram */
+/**Utility function to process author data for node link diagram */
 export const processAuthorData = (data: AuthorData[]): ChordData[] => {
-  // Create an object to store the unique datasetss contributed by each pair of authors
-  let datasetsCounts: { [key: string]: Set<string> } = {};
+  // Step 1: build dataset→authors index in O(nm)
+  const datasetToAuthors = new Map<string, string[]>();
+  for (const { author, datasets } of data) {
+    for (const dataset of datasets) {
+      let authors = datasetToAuthors.get(dataset as string);
+      if (!authors) {
+        authors = [];
+        datasetToAuthors.set(dataset as string, authors);
+      }
+      authors.push(author);
+    }
+  }
 
-  // Iterate through the data to count the unique datasetss contributed by each pair of authors
-  data.forEach((entry) => {
-    const { author, datasets } = entry;
-
-    // Iterate through the datasetss of the current author
-    datasets.forEach((datasetsTitle) => {
-      // Initialize an empty Set to store unique authors who contributed to this datasets
-      let authorsContributed = new Set<string>();
-
-      // Find authors who contributed to the current datasets
-      data.forEach((otherEntry) => {
-        if (otherEntry.datasets.includes(datasetsTitle)) {
-          authorsContributed.add(otherEntry.author);
+  // Step 2: for each dataset generate all author pairs and count shared datasets
+  const pairDatasets = new Map<string, Set<string>>();
+  for (const [dataset, authors] of datasetToAuthors) {
+    for (let i = 0; i < authors.length; i++) {
+      for (let j = i + 1; j < authors.length; j++) {
+        const a = authors[i];
+        const b = authors[j];
+        const key = a < b ? `${a}-${b}` : `${b}-${a}`;
+        let shared = pairDatasets.get(key);
+        if (!shared) {
+          shared = new Set<string>();
+          pairDatasets.set(key, shared);
         }
-      });
+        shared.add(dataset);
+      }
+    }
+  }
 
-      // Exclude the current author from the set
-      authorsContributed.delete(author);
-
-      // Iterate through the other authors
-      authorsContributed.forEach((otherAuthor) => {
-        const key =
-          author < otherAuthor
-            ? `${author}-${otherAuthor}`
-            : `${otherAuthor}-${author}`;
-        // Initialize an empty Set to store unique datasetss contributed by the pair of authors
-        datasetsCounts[key] = datasetsCounts[key] || new Set<string>();
-        // Add the current datasets to the Set
-        datasetsCounts[key].add(datasetsTitle);
-      });
+  const formattedData: ChordData[] = [];
+  for (const [key, shared] of pairDatasets) {
+    const dashIdx = key.indexOf("-");
+    formattedData.push({
+      from: key.slice(0, dashIdx),
+      to: key.slice(dashIdx + 1),
+      value: shared.size,
     });
-  });
-
-  // Convert unique datasets counts into the format required by amCharts
-  let formattedData: ChordData[] = [];
-  for (const [key, value] of Object.entries(datasetsCounts)) {
-    const [author1, author2] = key.split("-");
-    formattedData.push({ from: author1, to: author2, value: value.size });
   }
 
   return formattedData;

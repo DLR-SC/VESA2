@@ -2,7 +2,7 @@ import { Fab, Typography, Box, useTheme, Tooltip, IconButton } from "@mui/materi
 import RefreshIcon from "@mui/icons-material/Refresh";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import { useNavigate } from "react-router-dom";
-import { useDatafill } from "../../hooks/useDatafill";
+import { useDatafillContext } from "../../hooks/DatafillContext";
 import { useAppDispatch } from "../../store/hooks";
 import { resetDatasetSlice } from "../../store/dataset/datasetSlice";
 import { resetSelectedKeyword } from "../../store/selectedKeyword/selectedKeywordSlice";
@@ -14,7 +14,7 @@ const AppBar = (): JSX.Element => {
   const theme = useTheme();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { initialSetterBundle } = useDatafill();
+  const { initialSetterBundle } = useDatafillContext();
 
   const handleReset = () => {
     dispatch(resetSelectedKeyword());

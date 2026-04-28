@@ -35,6 +35,16 @@ const DatasetSlice = createSlice({
     setDataset(state, action: PayloadAction<IDataset[]>) {
       state.dataset = action.payload;
     },
+    setDatasetWithGeo(state, action: PayloadAction<IDataset[]>) {
+      state.dataset = action.payload;
+      const newGeoData = extractGeoData(action.payload);
+      state.geoData = newGeoData;
+      // Atomically deselect any geo IDs that no longer exist in the refreshed dataset
+      if (state.selectedGeoData.length) {
+        const validIds = new Set(newGeoData.map((d) => d.id));
+        state.selectedGeoData = state.selectedGeoData.filter((id) => validIds.has(id));
+      }
+    },
     setKeywordData(state, action: PayloadAction<IKeywordData[]>) {
       state.keywordData = action.payload;
     },
@@ -64,6 +74,7 @@ const DatasetSlice = createSlice({
 
 export const {
   setDataset,
+  setDatasetWithGeo,
   setKeywordData,
   setGeoData,
   updateSelectedGeoData,

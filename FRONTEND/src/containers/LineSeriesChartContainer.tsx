@@ -1,6 +1,6 @@
 import { CircularProgress } from "@mui/material";
 import CenteredCard from "../components/CenteredCard";
-import { useDatafill } from "../hooks/useDatafill";
+import { useDatafillContext } from "../hooks/DatafillContext";
 import _ from "lodash";
 import { IContainerProps, TemporalCoverage } from "types/appData";
 import LineSeriesChart from "../chartHooks/LineSeriesChart";
@@ -15,7 +15,7 @@ function LineSeriesChartContainer(props: IContainerProps): JSX.Element {
   const { isFetching } = useGetInitialDatasetsQuery();
   const timeData = useAppSelector((state) => state.dataset.timeData);
 
-  const { initialDateRanges, fetchAndSetAgainstTimeData } = useDatafill();
+  const { initialDateRanges, fetchAndSetAgainstTimeData } = useDatafillContext();
 
   const debouncedHandleScroll = _.debounce((range: TemporalCoverage) => {
     fetchAndSetAgainstTimeData(range);

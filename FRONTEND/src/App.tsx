@@ -10,6 +10,8 @@ import Footer from "./components/Footer";
 import AppBar from "./components/AppBar";
 import { IngestionPage } from "./components/ingestion";
 import { useGetSyncHistoryQuery } from "./store/services/syncApi";
+import { useDatafill } from "./hooks/useDatafill";
+import { DatafillContext } from "./hooks/DatafillContext";
 
 // Global subscription + route guard: redirects "/" to "/setup" when no data has been ingested yet.
 function AppRoutes(): JSX.Element {
@@ -25,16 +27,21 @@ function AppRoutes(): JSX.Element {
 }
 
 function AppContent(): JSX.Element {
+  // Single instantiation of useDatafill — covers AppBar and all route children via context
+  const datafill = useDatafill();
+
   return (
-    <BrowserRouter>
-      <Stack id="app" sx={{ minHeight: "100vh", width: "100%" }}>
-        <AppBar />
-        <Box component="main" sx={{ flex: 1, width: "100%" }}>
-          <AppRoutes />
-        </Box>
-        <Footer />
-      </Stack>
-    </BrowserRouter>
+    <DatafillContext.Provider value={datafill}>
+      <BrowserRouter>
+        <Stack id="app" sx={{ minHeight: "100vh", width: "100%" }}>
+          <AppBar />
+          <Box component="main" sx={{ flex: 1, width: "100%" }}>
+            <AppRoutes />
+          </Box>
+          <Footer />
+        </Stack>
+      </BrowserRouter>
+    </DatafillContext.Provider>
   );
 }
 

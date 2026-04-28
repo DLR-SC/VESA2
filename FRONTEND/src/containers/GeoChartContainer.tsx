@@ -1,17 +1,13 @@
 import { CircularProgress } from "@mui/material";
 import GeoChart from "../chartHooks/GeoChart";
-import { useDatafill } from "../hooks/useDatafill";
 import React from "react";
-import {
-  setSelectedGeoData,
-  updateSelectedGeoData,
-} from "../store/dataset/datasetSlice";
-import { filterDatasetsIfChanged } from "../store/dataset/utility/utility";
+import { updateSelectedGeoData } from "../store/dataset/datasetSlice";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { useGetInitialDatasetsQuery } from "../store/services/dataApi";
 import { IContainerProps, IDatasetID, IPointHoverHandler } from "types/appData";
 import CenteredCard from "../components/CenteredCard";
 import EmptyDatasetCard from "../components/EmptyDatasetCard";
+import { useDatafillContext } from "../hooks/DatafillContext";
 
 interface IGeoChartContainer extends IContainerProps {
   handlePointerHover: IPointHoverHandler;
@@ -20,34 +16,25 @@ interface IGeoChartContainer extends IContainerProps {
 function GeoChartContainer(props: IGeoChartContainer): JSX.Element {
   const { isFetching } = useGetInitialDatasetsQuery();
   const locationData = useAppSelector((state) => state.dataset.geoData);
-  const selectedGeoData = useAppSelector(
-    (state) => state.dataset.selectedGeoData
-  );
-  const selectedKeywordObject = useAppSelector(
-    (state) => state.selectedKeyword.selectedKeyword
-  );
+  const selectedGeoData = useAppSelector((state) => state.dataset.selectedGeoData);
   const dispatch = useAppDispatch();
+
+  const { compareAndResetAgainstGeoData } = useDatafillContext();
 
   const handleCoordinateSelection = (id: IDatasetID) => {
     dispatch(updateSelectedGeoData(id));
   };
 
-  const { compareAndResetAgainstGeoData } = useDatafill();
-
+  // Skip the first fire (mount) — initial data is already loaded by useDatafill in MainContent.
+  // Subsequent changes represent real user selections or system-driven deselections.
+  const hasMountedRef = React.useRef(false);
   React.useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
     compareAndResetAgainstGeoData(selectedGeoData);
   }, [selectedGeoData]);
-
-  React.useEffect(() => {
-    if (selectedKeywordObject) {
-      const updateSelectedGeoData = filterDatasetsIfChanged(
-        locationData,
-        selectedGeoData
-      );
-      if (updateSelectedGeoData)
-        dispatch(setSelectedGeoData(updateSelectedGeoData));
-    }
-  }, [locationData]);
 
   if (isFetching) {
     return (

@@ -7,7 +7,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useDatafill } from "../hooks/useDatafill";
+import { useDatafillContext } from "../hooks/DatafillContext";
 import React from "react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { updateSelectedKeyword } from "../store/selectedKeyword/selectedKeywordSlice";
@@ -23,7 +23,7 @@ function SearchBox(): JSX.Element {
   );
   const keywordData = useAppSelector((state) => state.dataset.keywordData);
 
-  const { fetchAndSetRelatedDataAgainstKeyword } = useDatafill();
+  const { fetchAndSetRelatedDataAgainstKeyword } = useDatafillContext();
 
   const dispatch = useAppDispatch();
   const [, { isLoading }] = useGetRelatedKeywordDataMutation({

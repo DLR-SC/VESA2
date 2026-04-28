@@ -3,7 +3,7 @@ import {
   resetDatasetSlice,
   setChordData,
   setDataset,
-  setGeoData,
+  setDatasetWithGeo,
   setKeywordData,
   setTimeData,
 } from "../store/dataset/datasetSlice";
@@ -24,12 +24,12 @@ import {
   IDataset,
   IDatasetID,
   IKeywordData,
+  ITransformedTimeData,
   TemporalCoverage,
 } from "types/appData";
 import { useQuery } from "./useQuery";
 
-/** A custom query for filling data states*/
-
+/** A custom query for filling data states */
 export const useDatafill = () => {
   const dispatch = useAppDispatch();
 
@@ -51,7 +51,7 @@ export const useDatafill = () => {
     (state) => state.dataset.selectedGeoData
   );
 
-  /** Initial date constant for timeseries chart */
+  /** Fallback view-range for the column chart before data loads */
   const initialDateRanges = {
     startDate: new Date("1950-01-01"),
     endDate: new Date("2030-01-01"),
@@ -59,96 +59,61 @@ export const useDatafill = () => {
 
   useEffect(() => {
     if (initialDataset?.result) {
-      setInitialDataset();
-      setInitialTimeData();
+      dispatch(setDatasetWithGeo(initialDataset.result));
+      dispatch(setTimeData(timeDataExtractor(initialDataset.result)));
     }
   }, [initialDataset]);
 
   useEffect(() => {
     if (initialkeywordData?.result) {
-      setInitialKeywordData();
+      dispatch(setKeywordData(initialkeywordData.result));
     }
   }, [initialkeywordData]);
 
   useEffect(() => {
     if (initialAuthorData?.result) {
-      setInitialChordData();
+      dispatch(setChordData(processAuthorData(initialAuthorData.result)));
     }
   }, [initialAuthorData]);
 
-  //setting initial data
-  const setInitialDataset = () => {
-    if (initialDataset) {
-      dispatch(setDataset(initialDataset.result));
-      dispatch(setGeoData(initialDataset.result));
-    }
-  };
-
-  const setInitialKeywordData = () => {
-    if (initialkeywordData) dispatch(setKeywordData(initialkeywordData.result));
-  };
-
-  const setInitialChordData = () => {
-    if (initialAuthorData) {
-      const result = processAuthorData(initialAuthorData.result);
-      dispatch(setChordData(result));
-    }
-  };
-
-  const setInitialTimeData = () => {
-    if (initialDataset) {
-      dispatch(
-        setTimeData(
-          timeDataExtractor(
-            initialDataset?.result,
-            initialDateRanges.startDate,
-            initialDateRanges.endDate
-          )
-        )
-      );
-    }
-  };
-
-  // utility function for fetching and setting
+  /**
+   * Core fetch orchestrator. Keywords and datasets are fetched in parallel;
+   * author data is fetched afterwards only when needed.
+   */
   const fetchAndSet = async (
     datasetIds: IDatasetID[],
     skipGeoData = false,
     skipAuthorData = false,
     skipTimeData = false
   ) => {
-    const relatedKeywordsData = await getRelatedKeywords(datasetIds);
-    dispatch(setKeywordData(relatedKeywordsData.result));
+    const [keywordsData, datasetsData] = await Promise.all([
+      getRelatedKeywords(datasetIds),
+      getRelatedDatasets(datasetIds),
+    ]);
 
-    const relatedDatasets = await getRelatedDatasets(datasetIds);
-    dispatch(setDataset(relatedDatasets.result));
+    dispatch(setKeywordData(keywordsData.result));
+
+    if (skipGeoData) {
+      dispatch(setDataset(datasetsData.result));
+    } else {
+      dispatch(setDatasetWithGeo(datasetsData.result));
+    }
 
     if (!skipTimeData) {
-      dispatch(
-        setTimeData(
-          timeDataExtractor(
-            relatedDatasets.result,
-            initialDateRanges.startDate,
-            initialDateRanges.endDate
-          )
-        )
-      );
+      dispatch(setTimeData(timeDataExtractor(datasetsData.result)));
     }
 
     if (!skipAuthorData) {
       const authorData = await getAuthorData(datasetIds);
-      const authorResult = processAuthorData(authorData.result);
-      dispatch(setChordData(authorResult));
+      dispatch(setChordData(processAuthorData(authorData.result)));
     }
-
-    if (!skipGeoData) dispatch(setGeoData(relatedDatasets.result));
   };
 
-  // this function fetches and sets related dataset for the selected keyword for all the other charts
   const fetchAndSetRelatedDataAgainstKeyword = async () => {
     if (selectedKeywordObject) {
       fetchAndSet(selectedKeywordObject.dataset_id);
     } else {
-      resetDatasetSlice();
+      dispatch(resetDatasetSlice());
       initialSetterBundle();
     }
   };
@@ -171,7 +136,6 @@ export const useDatafill = () => {
     fetchAndSet(datasetIDs, false, false, true);
   };
 
-  // geodata filter setting and resetting
   const compareAndResetAgainstGeoData = (datasetIds: IDatasetID[]) => {
     if (datasetIds.length) {
       fetchAndSet(datasetIds, true);
@@ -184,31 +148,26 @@ export const useDatafill = () => {
     }
   };
 
-  const timeDataExtractor = (
-    dataset: IDataset[],
-    startDate: Date,
-    endDate: Date
-  ) => {
+  /** Derives date range from actual data instead of using a hardcoded 80-year span. */
+  const timeDataExtractor = (dataset: IDataset[]) => {
     const timeData = extractAndTransformTimeData(dataset);
-    // const startDate = new Date(
-    //   _.orderBy(timeData, ["start"], ["asc"])[0].start
-    // );
+    if (!timeData.length) return [];
 
-    const resultantTimeData = intervalTreeFromTimedata(
-      startDate,
-      endDate,
-      timeData
-    );
-
-    return resultantTimeData;
+    const { startDate, endDate } = deriveDateRange(timeData);
+    return intervalTreeFromTimedata(startDate, endDate, timeData);
   };
 
-  /** A function to handle initial data setting for all charts when reset button is clicked */
   const initialSetterBundle = () => {
-    setInitialDataset();
-    setInitialKeywordData();
-    setInitialTimeData();
-    setInitialChordData();
+    if (initialDataset?.result) {
+      dispatch(setDatasetWithGeo(initialDataset.result));
+      dispatch(setTimeData(timeDataExtractor(initialDataset.result)));
+    }
+    if (initialkeywordData?.result) {
+      dispatch(setKeywordData(initialkeywordData.result));
+    }
+    if (initialAuthorData?.result) {
+      dispatch(setChordData(processAuthorData(initialAuthorData.result)));
+    }
   };
 
   return {
@@ -220,3 +179,26 @@ export const useDatafill = () => {
     initialSetterBundle,
   };
 };
+
+/** Computes start/end from actual dataset dates with a 1-year buffer on each side. */
+function deriveDateRange(timeData: ITransformedTimeData[]): {
+  startDate: Date;
+  endDate: Date;
+} {
+  const bufferMs = 365 * 24 * 60 * 60 * 1000;
+  let min = Infinity;
+  let max = -Infinity;
+
+  for (const { start, end } of timeData) {
+    const s = new Date(start).getTime();
+    const e = new Date(end).getTime();
+    if (!isNaN(s) && s < min) min = s;
+    if (!isNaN(e) && e > max) max = e;
+  }
+
+  if (!isFinite(min) || !isFinite(max)) {
+    return { startDate: new Date("1950-01-01"), endDate: new Date("2030-01-01") };
+  }
+
+  return { startDate: new Date(min - bufferMs), endDate: new Date(max + bufferMs) };
+}

@@ -1,24 +1,20 @@
 import { combineReducers, configureStore } from "@reduxjs/toolkit";
-import CrossFilterReducer from "./crossfilters/crossFilterSlice";
 import DatasetReducer from "./dataset/datasetSlice";
 import UIReducer from "./ui/uiSlice";
 import { listenerMiddleware } from "./listenerMiddleware";
 import SelectedKeywordReducer from "./selectedKeyword/selectedKeywordSlice";
 import { dataApi } from "./services/dataApi";
 import { miscApi } from "./services/miscApi";
-import { testDataApi } from "./services/testDataApi";
 import { wordCloudApi } from "./services/wordCloudApi";
 import { syncApi } from "./services/syncApi";
 
 const rootReducer = combineReducers({
   selectedKeyword: SelectedKeywordReducer,
-  crossFilters: CrossFilterReducer,
   dataset: DatasetReducer,
   ui: UIReducer,
   [dataApi.reducerPath]: dataApi.reducer,
   [miscApi.reducerPath]: miscApi.reducer,
   [wordCloudApi.reducerPath]: wordCloudApi.reducer,
-  [testDataApi.reducerPath]: testDataApi.reducer,
   [syncApi.reducerPath]: syncApi.reducer,
 });
 
