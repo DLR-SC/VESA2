@@ -20,7 +20,7 @@ function Footer(): JSX.Element {
         justifyContent: "space-between",
       }}
     >
-      <Typography variant="body2">&copy;&nbsp;NFDI4Earth</Typography>
+     
       <Box
         sx={{
           lineHeight: 0,
