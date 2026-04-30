@@ -5,10 +5,7 @@ import {
 } from "@mui/material";
 import { useCallback } from "react";
 import { useAppSelector } from "../store/hooks";
-import {
-  useGetInitialDatasetsQuery,
-  useGetRelatedDatasetsMutation,
-} from "../store/services/dataApi";
+import { useGetInitialDatasetsQuery } from "../store/services/dataApi";
 import { IContainerProps, IDataset, IKeywordData } from "types/appData";
 import PlaceholderCard from "./CenteredCard";
 import DataGrid from "./DataGrid";
@@ -19,11 +16,9 @@ function ResultBox(props: IContainerProps): JSX.Element {
     (state) => state.selectedKeyword.selectedKeyword as IKeywordData
   );
   const tableData = useAppSelector((state) => state.dataset.dataset);
+  const isFiltering = useAppSelector((state) => state.dataset.isFiltering);
 
   const { isFetching } = useGetInitialDatasetsQuery();
-  const [data, { isLoading }] = useGetRelatedDatasetsMutation({
-    fixedCacheKey: "shared-dataset-mutation",
-  });
 
   const theme = useTheme();
 
@@ -36,7 +31,7 @@ function ResultBox(props: IContainerProps): JSX.Element {
   };
 
   const renderContent = useCallback(() => {
-    if (isFetching || isLoading) {
+    if (isFetching || isFiltering) {
       return (
         <PlaceholderCard>
           <CircularProgress size={60} />
@@ -49,7 +44,7 @@ function ResultBox(props: IContainerProps): JSX.Element {
     ) : (
       <EmptyDatasetCard message={errorMessageText} />
     );
-  }, [isFetching, isLoading, tableData]);
+  }, [isFetching, isFiltering, tableData]);
 
   return (
     <Box

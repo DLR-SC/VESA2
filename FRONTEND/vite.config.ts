@@ -1,10 +1,13 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
+import { resolve } from 'path';
+
+const srcDir = resolve(__dirname, 'src');
 
 export default defineConfig({
   plugins: [react()],
-  base:'./',
+  base: './',
   build: {
     outDir: 'dist',
   },
@@ -14,7 +17,15 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': '/src',
+      '@': srcDir,
+      store: resolve(srcDir, 'store'),
+      types: resolve(srcDir, 'types'),
+      hooks: resolve(srcDir, 'hooks'),
+      utils: resolve(srcDir, 'utils'),
+      components: resolve(srcDir, 'components'),
+      containers: resolve(srcDir, 'containers'),
+      chartHooks: resolve(srcDir, 'chartHooks'),
+      HOC: resolve(srcDir, 'HOC'),
     },
   },
   test: {

@@ -13,24 +13,29 @@ interface ITimeSeriesProps {
 function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
   const chartRef = React.useRef<am5xy.XYChart | null>(null);
   const scrollbarRef = React.useRef<am5xy.XYChartScrollbar | null>(null);
-  const customColor = { blue: am5.color(0x6894dc) }; // blue color for the columns
+  const customColor = { blue: am5.color(0x6894dc) };
 
   const [timeRange, setTimeRange] = React.useState<TemporalCoverage>(
     props.initialDate
   );
 
-  // Modularized helper functions
+  // True during mount and immediately after programmatic data updates.
+  // Prevents amCharts axis events (fired by zoomOut()) from triggering handleScroll.
+  const suppressScrollRef = React.useRef(true);
+
+  // Keep a stable ref to the callback so the chart init closure never goes stale.
+  const handleScrollRef = React.useRef(props.handleScroll);
+  useEffect(() => {
+    handleScrollRef.current = props.handleScroll;
+  });
+
   function createRoot(containerId: string): am5.Root {
     let root = am5.Root.new(containerId);
-
-    // Set themes
     root.setThemes([am5themes_Animated.new(root)]);
-
     root.dateFormatter.setAll({
       dateFormat: "yyyy",
       dateFields: ["valueX"],
     });
-
     return root;
   }
 
@@ -123,20 +128,18 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
 
     xAxis.onPrivate("selectionMin", function (value) {
       if (value) {
-        let startDate = new Date(value);
         setTimeRange((prev) => ({
           ...prev,
-          start_date: startDate.toISOString(),
+          start_date: new Date(value).toISOString(),
         }));
       }
     });
 
     xAxis.onPrivate("selectionMax", function (value) {
       if (value) {
-        let endDate = new Date(value);
         setTimeRange((prev) => ({
           ...prev,
-          end_date: endDate.toISOString(),
+          end_date: new Date(value).toISOString(),
         }));
       }
     });
@@ -208,6 +211,7 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
     cursor.lineY.set("visible", false);
   }
 
+  // Chart initialisation — runs once on mount.
   useEffect(() => {
     let root = createRoot("time-chart");
     let chart = createChart(root);
@@ -222,35 +226,52 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
     chartRef.current = chart;
     scrollbarRef.current = scrollbar;
 
+    // Lift the mount suppress once the chart animation has settled.
+    const timer = setTimeout(() => {
+      suppressScrollRef.current = false;
+    }, 1200);
+
     return () => {
+      clearTimeout(timer);
       root.dispose();
       chart.dispose();
-    }; // Cleanup function
+    };
   }, []);
 
-  /** Setting the data for series and scrollbar series */
+  // Data update — fires whenever the Redux timeData slice changes.
   useEffect(() => {
     if (chartRef.current && scrollbarRef.current) {
+      // Suppress any scroll callbacks triggered by the programmatic zoomOut below.
+      suppressScrollRef.current = true;
+
       const mainSeries = chartRef.current.series.getIndex(0);
       const sbSeries = scrollbarRef.current.chart.series.getIndex(0);
 
       if (mainSeries && sbSeries) {
-        // replacing 0 values with null for columnSeries
         const processedData = props.data.map(({ date, value }) => ({
           date,
           value: value || null,
         }));
-
         mainSeries.data.setAll(processedData);
         sbSeries.data.setAll(props.data);
       }
 
       chartRef.current.zoomOut();
+
+      // Release suppress once amCharts has finished its zoom animation.
+      const timer = setTimeout(() => {
+        suppressScrollRef.current = false;
+      }, 1200);
+
+      return () => clearTimeout(timer);
     }
   }, [props.data]);
 
+  // Propagate timeRange to the container — only for genuine user scroll interactions.
   useEffect(() => {
-    props.handleScroll(timeRange);
+    if (!suppressScrollRef.current) {
+      handleScrollRef.current(timeRange);
+    }
   }, [timeRange]);
 
   return <div id="time-chart" className="chart_div" />;

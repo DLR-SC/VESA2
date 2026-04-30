@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { createAction, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import {
   AuthorData,
   ChordData,
@@ -7,6 +7,7 @@ import {
   IGeoData,
   IKeywordData,
   ITimeData,
+  TemporalCoverage,
 } from "types/appData";
 import { extractGeoData, toggleSelectedGeoData } from "./utility/utility";
 
@@ -17,6 +18,7 @@ export interface IDatasetSlice {
   selectedGeoData: IDatasetID[];
   timeData: ITimeData[];
   chordData: ChordData[];
+  isFiltering: boolean;
 }
 
 const initialState: IDatasetSlice = {
@@ -26,6 +28,7 @@ const initialState: IDatasetSlice = {
   selectedGeoData: [],
   timeData: [],
   chordData: [],
+  isFiltering: false,
 };
 
 const DatasetSlice = createSlice({
@@ -64,7 +67,10 @@ const DatasetSlice = createSlice({
       state.timeData = action.payload;
     },
     setChordData(state, action: PayloadAction<ChordData[]>) {
-      state.chordData = action.payload.slice(0,100); // adding a cap of 100 to limit initial node link diagram chart
+      state.chordData = action.payload.slice(0, 100);
+    },
+    setIsFiltering(state, action: PayloadAction<boolean>) {
+      state.isFiltering = action.payload;
     },
     reset() {
       return initialState;
@@ -82,6 +88,9 @@ export const {
   setSelectedGeoData,
   setTimeData,
   setChordData,
+  setIsFiltering,
 } = DatasetSlice.actions;
+
+export const filterByTimeRange = createAction<TemporalCoverage>("dataset/filterByTimeRange");
 
 export default DatasetSlice.reducer;

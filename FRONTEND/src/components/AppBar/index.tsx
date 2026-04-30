@@ -2,24 +2,20 @@ import { Fab, Typography, Box, useTheme, Tooltip, IconButton } from "@mui/materi
 import RefreshIcon from "@mui/icons-material/Refresh";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import { useNavigate } from "react-router-dom";
-import { useDatafillContext } from "../../hooks/DatafillContext";
 import { useAppDispatch } from "../../store/hooks";
 import { resetDatasetSlice } from "../../store/dataset/datasetSlice";
-import { resetSelectedKeyword } from "../../store/selectedKeyword/selectedKeywordSlice";
+import { updateSelectedKeyword } from "../../store/selectedKeyword/selectedKeywordSlice";
 import GridSettingsButton from "./GridSettingsButton";
-import HelpButton from "./HelpButton";
 import DataSourcesButton from "./DataSourcesButton";
 
 const AppBar = (): JSX.Element => {
   const theme = useTheme();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { initialSetterBundle } = useDatafillContext();
 
   const handleReset = () => {
-    dispatch(resetSelectedKeyword());
+    dispatch(updateSelectedKeyword(null));
     dispatch(resetDatasetSlice());
-    initialSetterBundle();
   };
 
   return (
@@ -56,7 +52,6 @@ const AppBar = (): JSX.Element => {
         </Tooltip>
         <DataSourcesButton />
         <GridSettingsButton />
-        {/* <HelpButton /> */}
       </Box>
     </Box>
   );

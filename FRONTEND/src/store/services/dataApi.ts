@@ -5,6 +5,14 @@ import {
   IKeywordData,
   TemporalCoverage,
 } from "types/appData";
+import {
+  setDatasetWithGeo,
+  setKeywordData,
+  setChordData,
+  setTimeData,
+} from "store/dataset/datasetSlice";
+import { computeTimeData, processAuthorData } from "store/dataset/utility/utility";
+import type { RootState } from "store";
 
 type DatasetResponse = {
   result: IDataset[];
@@ -38,61 +46,54 @@ export const dataApi = createApi({
   reducerPath: "dataApi",
   baseQuery: fetchBaseQuery({ baseUrl: import.meta.env.VITE_API_URL }),
   endpoints: (builder) => ({
-    // API end point for getting initial data
     getInitialDatasets: builder.query<DatasetResponse, void>({
-      query: () => {
-        return "main/all";
+      query: () => "main/all",
+      async onQueryStarted(_, { dispatch, queryFulfilled, getState }) {
+        try {
+          const { data } = await queryFulfilled;
+          const keyword = (getState() as RootState).selectedKeyword.selectedKeyword;
+          if (keyword) return;
+          dispatch(setDatasetWithGeo(data.result));
+          dispatch(setTimeData(computeTimeData(data.result)));
+        } catch {}
       },
     }),
-    // API endpoint for getting initial KEYWORD data
     getInitialKeywordData: builder.query<KeywordDataResponse, void>({
-      query: () => {
-        return "keywords/all";
+      query: () => "keywords/all",
+      async onQueryStarted(_, { dispatch, queryFulfilled, getState }) {
+        try {
+          const { data } = await queryFulfilled;
+          const keyword = (getState() as RootState).selectedKeyword.selectedKeyword;
+          if (keyword) return;
+          dispatch(setKeywordData(data.result));
+        } catch {}
       },
     }),
-    // API endpoint for getting related KEYWORD data
-    getRelatedKeywordData: builder.mutation<
-      KeywordDataResponse,
-      postDataRequestType
-    >({
-      query: (req) => {
-        return { url: "keywords/", method: "POST", body: req };
-      },
+    getRelatedKeywordData: builder.mutation<KeywordDataResponse, postDataRequestType>({
+      query: (req) => ({ url: "keywords/", method: "POST", body: req }),
     }),
-    // API endpoint for getting related datasets from selected keyword
     getRelatedDatasets: builder.mutation<DatasetResponse, postDataRequestType>({
-      query: (req) => {
-        return { url: "main/", method: "POST", body: req };
-      },
+      query: (req) => ({ url: "main/", method: "POST", body: req }),
     }),
-    getTimeDatasetData: builder.mutation<
-      DatasetResponse,
-      postTimeDataRequestType
-    >({
-      query: (req) => {
-        return { url: "time/main", method: "POST", body: req };
-      },
+    getTimeDatasetData: builder.mutation<DatasetResponse, postTimeDataRequestType>({
+      query: (req) => ({ url: "time/main", method: "POST", body: req }),
     }),
-    getTimeKeywordData: builder.mutation<
-      DatasetResponse,
-      postTimeDataRequestType
-    >({
-      query: (req) => {
-        return { url: "time/keywords", method: "POST", body: req };
-      },
+    getTimeKeywordData: builder.mutation<DatasetResponse, postTimeDataRequestType>({
+      query: (req) => ({ url: "time/keywords", method: "POST", body: req }),
     }),
     getInitialAuthorData: builder.query<AuthorDataResponse, void>({
-      query: () => {
-        return "author/all";
+      query: () => "author/all",
+      async onQueryStarted(_, { dispatch, queryFulfilled, getState }) {
+        try {
+          const { data } = await queryFulfilled;
+          const keyword = (getState() as RootState).selectedKeyword.selectedKeyword;
+          if (keyword) return;
+          dispatch(setChordData(processAuthorData(data.result)));
+        } catch {}
       },
     }),
-    getAuthorData: builder.mutation<
-      AuthorDataResponse,
-      postAuthorDataRequestType
-    >({
-      query: (req) => {
-        return { url: "author/", method: "POST", body: req };
-      },
+    getAuthorData: builder.mutation<AuthorDataResponse, postAuthorDataRequestType>({
+      query: (req) => ({ url: "author/", method: "POST", body: req }),
     }),
   }),
 });

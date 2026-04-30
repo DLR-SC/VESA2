@@ -1,24 +1,21 @@
 import { CircularProgress } from "@mui/material";
 import CenteredCard from "../components/CenteredCard";
-import { useDatafillContext } from "../hooks/DatafillContext";
 import _ from "lodash";
 import { IContainerProps, TemporalCoverage } from "types/appData";
-import LineSeriesChart from "../chartHooks/LineSeriesChart";
 import EmptyDatasetCard from "../components/EmptyDatasetCard";
-import { useAppSelector } from "../store/hooks";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { useGetInitialDatasetsQuery } from "../store/services/dataApi";
 import { convertToDateString } from "../store/dataset/utility/utility";
+import { filterByTimeRange } from "../store/dataset/datasetSlice";
 import ColumnSeriesChart from "../chartHooks/ColumnSeriesChart";
 
 function LineSeriesChartContainer(props: IContainerProps): JSX.Element {
-  const containerHeight = "400px";
   const { isFetching } = useGetInitialDatasetsQuery();
   const timeData = useAppSelector((state) => state.dataset.timeData);
-
-  const { initialDateRanges, fetchAndSetAgainstTimeData } = useDatafillContext();
+  const dispatch = useAppDispatch();
 
   const debouncedHandleScroll = _.debounce((range: TemporalCoverage) => {
-    fetchAndSetAgainstTimeData(range);
+    dispatch(filterByTimeRange(range));
   }, 500);
 
   const handleScroll = (range: TemporalCoverage) => {
@@ -33,14 +30,21 @@ function LineSeriesChartContainer(props: IContainerProps): JSX.Element {
     );
   }
 
+  const firstDate = timeData.length
+    ? new Date(timeData[0].date as number)
+    : new Date("1950-01-01");
+  const lastDate = timeData.length
+    ? new Date(timeData[timeData.length - 1].date as number)
+    : new Date("2030-01-01");
+
   return timeData.length ? (
     <>
       <ColumnSeriesChart
         data={timeData}
         handleScroll={handleScroll}
         initialDate={{
-          start_date: convertToDateString(initialDateRanges.startDate),
-          end_date: convertToDateString(initialDateRanges.endDate),
+          start_date: convertToDateString(firstDate),
+          end_date: convertToDateString(lastDate),
         }}
       />
     </>

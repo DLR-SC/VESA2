@@ -7,6 +7,7 @@ import { dataApi } from "./services/dataApi";
 import { miscApi } from "./services/miscApi";
 import { wordCloudApi } from "./services/wordCloudApi";
 import { syncApi } from "./services/syncApi";
+import { registerDataListeners } from "./listeners/dataListeners";
 
 const rootReducer = combineReducers({
   selectedKeyword: SelectedKeywordReducer,
@@ -17,17 +18,6 @@ const rootReducer = combineReducers({
   [wordCloudApi.reducerPath]: wordCloudApi.reducer,
   [syncApi.reducerPath]: syncApi.reducer,
 });
-
-// /** Listeners for chart filters */
-// Listener middleware to listen for dataset and set the geoData
-// startAppListening({
-//   actionCreator: setDataset,
-//   effect: async (action, listenerApi) => {
-//     const { dataset } =
-//       listenerApi.getState().dataset;
-//     listenerApi.dispatch(setGeoData(dataset))
-//   },
-// });
 
 export const Store = configureStore({
   reducer: rootReducer,
@@ -44,3 +34,5 @@ export const Store = configureStore({
 
 export type RootState = ReturnType<typeof Store.getState>;
 export type AppDispatch = typeof Store.dispatch;
+
+registerDataListeners();

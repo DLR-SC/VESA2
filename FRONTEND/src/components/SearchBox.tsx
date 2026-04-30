@@ -7,32 +7,19 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useDatafillContext } from "../hooks/DatafillContext";
-import React from "react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { updateSelectedKeyword } from "../store/selectedKeyword/selectedKeywordSlice";
-import { useGetRelatedKeywordDataMutation } from "../store/services/dataApi";
 import { IKeywordData } from "types/appData";
-/**
- * The SearchBox component handles all the functionalities related to getting related keyword data
- */
+import React from "react";
 
 function SearchBox(): JSX.Element {
   const selectedKeywordObject = useAppSelector(
     (state) => state.selectedKeyword.selectedKeyword as IKeywordData
   );
   const keywordData = useAppSelector((state) => state.dataset.keywordData);
-
-  const { fetchAndSetRelatedDataAgainstKeyword } = useDatafillContext();
+  const isFiltering = useAppSelector((state) => state.dataset.isFiltering);
 
   const dispatch = useAppDispatch();
-  const [, { isLoading }] = useGetRelatedKeywordDataMutation({
-    fixedCacheKey: "shared-keyword-mutation",
-  });
-
-  React.useEffect(() => {
-    fetchAndSetRelatedDataAgainstKeyword();
-  }, [selectedKeywordObject]);
 
   const handleChange = (
     event: React.SyntheticEvent,
@@ -73,7 +60,7 @@ function SearchBox(): JSX.Element {
                   sx: { borderRadius: 20 },
                   startAdornment: (
                     <InputAdornment style={{ color: "grey" }} position="start">
-                      {isLoading ? <CircularProgress size={20} /> : <Search />}
+                      {isFiltering ? <CircularProgress size={20} /> : <Search />}
                     </InputAdornment>
                   ),
                 }}

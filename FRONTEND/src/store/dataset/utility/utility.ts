@@ -168,6 +168,24 @@ export const getDatasetID = (dataset: IDataset[]): IDatasetID[] => {
   return dataset.map((item) => item.id);
 };
 
+export function deriveDateRange(
+  timeData: ITransformedTimeData[]
+): { startDate: Date; endDate: Date } {
+  const starts = timeData.map((d) => new Date(d.start).getTime()).filter((v) => !isNaN(v));
+  const ends = timeData.map((d) => new Date(d.end).getTime()).filter((v) => !isNaN(v));
+  return {
+    startDate: new Date(Math.min(...starts)),
+    endDate: new Date(Math.max(...ends)),
+  };
+}
+
+export function computeTimeData(dataset: IDataset[]): ITimeData[] {
+  const timeData = extractAndTransformTimeData(dataset);
+  if (!timeData.length) return [];
+  const { startDate, endDate } = deriveDateRange(timeData);
+  return intervalTreeFromTimedata(startDate, endDate, timeData);
+}
+
 /**Utility function to process author data for node link diagram */
 export const processAuthorData = (data: AuthorData[]): ChordData[] => {
   // Step 1: build dataset→authors index in O(nm)
