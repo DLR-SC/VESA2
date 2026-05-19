@@ -8,19 +8,20 @@ import { useGetInitialDatasetsQuery } from "../store/services/dataApi";
 import { convertToDateString } from "../store/dataset/utility/utility";
 import { filterByTimeRange } from "../store/dataset/datasetSlice";
 import ColumnSeriesChart from "../chartHooks/ColumnSeriesChart";
+import React from "react";
 
 function LineSeriesChartContainer(props: IContainerProps): JSX.Element {
   const { isFetching } = useGetInitialDatasetsQuery();
   const timeData = useAppSelector((state) => state.dataset.timeData);
   const dispatch = useAppDispatch();
 
-  const debouncedHandleScroll = _.debounce((range: TemporalCoverage) => {
-    dispatch(filterByTimeRange(range));
-  }, 500);
-
-  const handleScroll = (range: TemporalCoverage) => {
-    debouncedHandleScroll(range);
-  };
+  // Stable debounce — created once, survives re-renders so timeData updates
+  // don't reset the 500ms timer mid-flight.
+  const debouncedHandleScroll = React.useRef(
+    _.debounce((range: TemporalCoverage) => {
+      dispatch(filterByTimeRange(range));
+    }, 500)
+  ).current;
 
   if (isFetching) {
     return (
@@ -41,7 +42,7 @@ function LineSeriesChartContainer(props: IContainerProps): JSX.Element {
     <>
       <ColumnSeriesChart
         data={timeData}
-        handleScroll={handleScroll}
+        handleScroll={debouncedHandleScroll}
         initialDate={{
           start_date: convertToDateString(firstDate),
           end_date: convertToDateString(lastDate),
