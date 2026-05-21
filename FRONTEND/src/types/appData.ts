@@ -161,6 +161,15 @@ export interface ISyncStopResponse {
   message: string;
 }
 
+export interface ISyncResumeRequest {
+  job_id: string;
+}
+
+export interface ISyncResumeResponse {
+  message: string;
+  job_id: string;
+}
+
 export interface ISyncHistoryEntry {
   prefix: string;
   source_url: string;

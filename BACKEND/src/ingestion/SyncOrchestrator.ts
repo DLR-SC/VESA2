@@ -9,7 +9,7 @@ import { IDataAdapter } from './contracts/IDataAdapter';
 // Global flag to disable prefixing logic entirely for testing purposes.
 export const SKIP_PREFIXING_TEST_MODE = false;
 
-type SyncStatus = 'running' | 'idle' | 'failed';
+type SyncStatus = 'running' | 'idle' | 'failed' | 'completed';
 
 interface SyncState {
   status: SyncStatus;
@@ -18,6 +18,12 @@ interface SyncState {
   current_prefix: string;
   job_id?: string;
   error_message?: string;
+  source_url?: string;
+}
+
+interface ResumeFrom {
+  token: string | null;
+  processed: number;
 }
 
 export class SyncOrchestrator {
@@ -79,6 +85,7 @@ export class SyncOrchestrator {
           total: log.total_limit ?? (log.count_success + log.count_failure),
           current_prefix: log.prefix,
           job_id: log._key,
+          source_url: log.source_url,
           error_message: log.error_message ?? (status === 'failed' ? 'Process terminated unexpectedly (server restarted)' : undefined),
         };
       }
@@ -100,6 +107,47 @@ export class SyncOrchestrator {
     if (this.state.status === 'running') {
       this.abortSignal = true;
     }
+  }
+
+  public async resume(jobId: string): Promise<string> {
+    if (this.state.status === 'running') {
+      throw new Error('[SyncOrchestrator] A sync is already running.');
+    }
+
+    const cursor = await this.db.query(
+      `FOR log IN SyncLogs FILTER log._key == @key LIMIT 1 RETURN log`,
+      { key: jobId }
+    );
+    if (!cursor.hasNext) throw new Error(`Job ${jobId} not found in SyncLogs.`);
+    const log = await cursor.next();
+
+    if (log.status === 'running') throw new Error('Job is already running.');
+
+    const syncLogsCol = this.db.collection('SyncLogs');
+    await syncLogsCol.update(jobId, { status: 'running', error_message: null });
+
+    this.state = {
+      status: 'running',
+      processed: log.count_success ?? 0,
+      total: log.total_limit ?? log.count_success ?? 0,
+      current_prefix: log.prefix,
+      job_id: jobId,
+      source_url: log.source_url,
+    };
+    this.abortSignal = false;
+
+    this._runSyncBackground(
+      jobId,
+      log.source_url,
+      log.prefix,
+      log.total_limit ?? log.count_success ?? 0,
+      log.batch_size ?? 100,
+      log.inter_batch_sleep_ms ?? 1000,
+      syncLogsCol,
+      { token: log.resume_token ?? null, processed: log.count_success ?? 0 }
+    ).catch(err => console.error('[SyncOrchestrator] Background resume critically failed:', err));
+
+    return jobId;
   }
 
   private async fetchBatch(url: string, params: Record<string, any>): Promise<any> {
@@ -140,7 +188,10 @@ export class SyncOrchestrator {
       count_success: 0,
       count_failure: 0,
       total_limit: limit,
+      batch_size: batchSize,
+      inter_batch_sleep_ms: interBatchSleepMs,
       start_time: new Date().toISOString(),
+      resume_token: null,
       ui_config,
     });
 
@@ -149,7 +200,7 @@ export class SyncOrchestrator {
     this.abortSignal = false;
 
     // Fire-and-forget: return the job ID immediately while the sync runs in the background.
-    this._runSyncBackground(jobId, url, prefix, limit, batchSize, interBatchSleepMs, syncLogsCol).catch(err =>
+    this._runSyncBackground(jobId, url, prefix, limit, batchSize, interBatchSleepMs, syncLogsCol, null).catch(err =>
       console.error('[SyncOrchestrator] Background job critically failed:', err)
     );
 
@@ -163,30 +214,34 @@ export class SyncOrchestrator {
     limit: number,
     batchSize: number,
     interBatchSleepMs: number,
-    syncLogsCol: any
+    syncLogsCol: any,
+    resumeFrom: ResumeFrom | null,
   ): Promise<void> {
     if (SKIP_PREFIXING_TEST_MODE) {
       console.warn('\x1b[33m[SyncOrchestrator] *** TEST MODE ACTIVE: Prefixing logic will be skipped entirely. ***\x1b[0m');
     }
 
-    console.log(`\x1b[36m[SyncOrchestrator] Initiating handshake with ${url}... (Job ID: ${jobId})\x1b[0m`);
-    const validationResult = await this.validator.validate(url);
+    if (!resumeFrom) {
+      console.log(`\x1b[36m[SyncOrchestrator] Initiating handshake with ${url}... (Job ID: ${jobId})\x1b[0m`);
+      const validationResult = await this.validator.validate(url);
 
-    if (!validationResult.valid) {
-      // Persist to DB first, then update in-memory — keeps the two sources consistent.
-      await syncLogsCol.update(jobId, {
-        status: 'failed',
-        error_message: `Handshake failed: ${validationResult.message}`,
-        end_time: new Date().toISOString(),
-      });
-      this.state.status = 'failed';
-      console.error(`\x1b[31m[SyncOrchestrator] Handshake failed: ${validationResult.message}\x1b[0m`);
-      return;
+      if (!validationResult.valid) {
+        // Persist to DB first, then update in-memory — keeps the two sources consistent.
+        await syncLogsCol.update(jobId, {
+          status: 'failed',
+          error_message: `Handshake failed: ${validationResult.message}`,
+          end_time: new Date().toISOString(),
+        });
+        this.state.status = 'failed';
+        console.error(`\x1b[31m[SyncOrchestrator] Handshake failed: ${validationResult.message}\x1b[0m`);
+        return;
+      }
+      console.log(`\x1b[32m[SyncOrchestrator] Handshake successful. Beginning sync up to ${limit} records in batches of ${batchSize}.\x1b[0m`);
+    } else {
+      console.log(`\x1b[36m[SyncOrchestrator] Resuming job ${jobId} from record ${resumeFrom.processed}/${limit} (token: ${resumeFrom.token ?? 'none'}).\x1b[0m`);
     }
 
-    console.log(`\x1b[32m[SyncOrchestrator] Handshake successful. Beginning sync up to ${limit} records in batches of ${batchSize}.\x1b[0m`);
-
-    let paginationToken: string | null = null;
+    let paginationToken: string | null = resumeFrom?.token ?? null;
     let hasMoreData = true;
     let batchNumber = 0;
     const expectedBatches = Math.ceil(limit / batchSize);
@@ -235,7 +290,7 @@ export class SyncOrchestrator {
 
         if (batchPayloads.length > 0) {
           await this.writer.writeBatch(batchPayloads, prefix);
-          await syncLogsCol.update(jobId, { count_success: this.state.processed });
+          await syncLogsCol.update(jobId, { count_success: this.state.processed, resume_token: nextToken ?? null });
           const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
           const rps = (this.state.processed / ((Date.now() - startTime) / 1000)).toFixed(1);
           const pct = Math.min(100, Math.floor((this.state.processed / limit) * 100));
@@ -259,7 +314,7 @@ export class SyncOrchestrator {
         ? (this.state.processed / ((Date.now() - startTime) / 1000)).toFixed(1)
         : '0';
       await syncLogsCol.update(jobId, { status: 'completed', end_time: new Date().toISOString() });
-      this.state.status = 'idle';
+      this.state.status = 'completed';
       console.log(`\x1b[32m[SyncOrchestrator] ✔ Sync complete — ${this.state.processed} records in ${totalSec}s (${avgRps} rec/s avg).\x1b[0m`);
     } catch (err: any) {
       // Same ordering discipline: DB first, then in-memory.

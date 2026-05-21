@@ -89,7 +89,23 @@ export const getIngestionRouter = () => {
     res.json({ message: 'Stop signal sent to the orchestrator.' });
   });
 
-  // 5. GET /sync/history
+  // 5. POST /sync/resume
+  router.post('/resume', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { job_id } = req.body;
+      if (!job_id) {
+        res.status(400).json({ error: 'job_id is required' });
+        return;
+      }
+      const resumedJobId = await orchestrator.resume(job_id);
+      res.status(202).json({ message: 'Resume started.', job_id: resumedJobId });
+    } catch (error: any) {
+      console.error('[Ingestion API] Resume error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // 6. GET /sync/history
   router.get('/history', async (_req: Request, res: Response): Promise<void> => {
     try {
       const cursor = await db.query(syncHistoryQuery);
