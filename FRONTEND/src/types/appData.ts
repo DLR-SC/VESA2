@@ -40,6 +40,13 @@ export interface TemporalCoverage {
   end_date: string | null;
 }
 
+export interface FilterEntry {
+  type: "keyword" | "time" | "geo";
+  label: string;
+  datasetIds: IDatasetID[];
+  meta?: { timeRange?: TemporalCoverage; keywordData?: IKeywordData };
+}
+
 interface LocationData {
   west_bound_longitude: `${number}` | null;
   east_bound_longitude: `${number}` | null;

@@ -7,6 +7,8 @@ import { IContainerProps, IDatasetID, IPointHoverHandler } from "types/appData";
 import CenteredCard from "../components/CenteredCard";
 import EmptyDatasetCard from "../components/EmptyDatasetCard";
 
+const EMPTY_GEO_IDS: IDatasetID[] = [];
+
 interface IGeoChartContainer extends IContainerProps {
   handlePointerHover: IPointHoverHandler;
 }
@@ -14,7 +16,9 @@ interface IGeoChartContainer extends IContainerProps {
 function GeoChartContainer(props: IGeoChartContainer): JSX.Element {
   const { isFetching } = useGetInitialDatasetsQuery();
   const locationData = useAppSelector((state) => state.dataset.geoData);
-  const selectedGeoData = useAppSelector((state) => state.dataset.selectedGeoData);
+  const selectedGeoData = useAppSelector(
+    (state) => state.dataset.filterStack.find((e) => e.type === "geo")?.datasetIds ?? EMPTY_GEO_IDS
+  );
   const dispatch = useAppDispatch();
 
   const handleCoordinateSelection = (id: IDatasetID) => {

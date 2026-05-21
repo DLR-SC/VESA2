@@ -31,6 +31,11 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
   // distinguish the axis reset from a genuine user scroll.
   const resetRangeRef = React.useRef<TemporalCoverage>(props.initialDate);
 
+  // Set to true before programmatic zoomOut(); cleared once the axis settles back to
+  // the reset range. While true, useEffect([timeRange]) skips dispatch so the
+  // animation frames don't fire spurious filterByTimeRange actions.
+  const isResettingRef = React.useRef(false);
+
   // Stable ref to the callback so the chart-init closure never captures a stale value.
   const handleScrollRef = React.useRef(props.handleScroll);
   useEffect(() => {
@@ -264,17 +269,23 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
         sbSeries.data.setAll(props.data);
       }
 
+      isResettingRef.current = true;
       chartRef.current.zoomOut();
     }
   }, [props.data]);
 
   // Propagate timeRange to the container — but ONLY for genuine user interactions.
-  // A programmatic zoomOut() after data update settles the axis to the full data extent;
-  // that matches resetRangeRef within one day and is silently ignored.
+  // While isResettingRef is set, we're inside a programmatic zoomOut() animation;
+  // suppress all dispatches until the axis settles back to the reset range.
   useEffect(() => {
     const isReset =
       withinOneDay(timeRange.start_date, resetRangeRef.current.start_date) &&
       withinOneDay(timeRange.end_date, resetRangeRef.current.end_date);
+
+    if (isResettingRef.current) {
+      if (isReset) isResettingRef.current = false;
+      return;
+    }
 
     if (!isReset) {
       handleScrollRef.current(timeRange);

@@ -1,6 +1,7 @@
 import { createAction, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import {
   ChordData,
+  FilterEntry,
   IDataset,
   IDatasetID,
   IGeoData,
@@ -10,33 +11,24 @@ import {
 } from "types/appData";
 import { extractGeoData, toggleSelectedGeoData } from "./utility/utility";
 
-// Resolved dataset IDs for each active filter dimension.
-// Geo is excluded here — it is always read directly from selectedGeoData.
-export interface ActiveFilters {
-  keyword: IDatasetID[] | null;
-  time: IDatasetID[] | null;
-}
-
 export interface IDatasetSlice {
   dataset: IDataset[];
   keywordData: IKeywordData[];
   geoData: IGeoData[];
-  selectedGeoData: IDatasetID[];
+  filterStack: FilterEntry[];
   timeData: ITimeData[];
   chordData: ChordData[];
   isFiltering: boolean;
-  activeFilters: ActiveFilters;
 }
 
 const initialState: IDatasetSlice = {
   dataset: [],
   keywordData: [],
   geoData: [],
-  selectedGeoData: [],
+  filterStack: [],
   timeData: [],
   chordData: [],
   isFiltering: false,
-  activeFilters: { keyword: null, time: null },
 };
 
 const DatasetSlice = createSlice({
@@ -50,26 +42,52 @@ const DatasetSlice = createSlice({
       state.dataset = action.payload;
       const newGeoData = extractGeoData(action.payload);
       state.geoData = newGeoData;
-      // Atomically deselect any geo IDs that no longer exist in the refreshed dataset
-      if (state.selectedGeoData.length) {
+      // Prune any geo filter IDs that no longer exist in the refreshed dataset
+      const geoIdx = state.filterStack.findIndex((e) => e.type === "geo");
+      if (geoIdx >= 0) {
         const validIds = new Set(newGeoData.map((d) => d.id));
-        state.selectedGeoData = state.selectedGeoData.filter((id) => validIds.has(id));
+        const pruned = state.filterStack[geoIdx].datasetIds.filter((id) =>
+          validIds.has(id)
+        );
+        if (pruned.length === 0) {
+          state.filterStack.splice(geoIdx, 1);
+        } else {
+          state.filterStack[geoIdx] = {
+            ...state.filterStack[geoIdx],
+            datasetIds: pruned,
+            label: `${pruned.length} map point${pruned.length > 1 ? "s" : ""}`,
+          };
+        }
       }
     },
     setKeywordData(state, action: PayloadAction<IKeywordData[]>) {
       state.keywordData = action.payload;
     },
-    setGeoData(state, action: PayloadAction<IDataset[]>) {
-      state.geoData = extractGeoData(action.payload);
-    },
+    // Toggles a single geo point ID within the geo filterStack entry.
+    // Upserts the entry on first selection; removes it when the last point is deselected.
     updateSelectedGeoData(state, action: PayloadAction<IDatasetID>) {
-      state.selectedGeoData = toggleSelectedGeoData(
-        state.selectedGeoData,
+      const geoIdx = state.filterStack.findIndex((e) => e.type === "geo");
+      if (geoIdx < 0) {
+        state.filterStack.push({
+          type: "geo",
+          label: "1 map point",
+          datasetIds: [action.payload],
+        });
+        return;
+      }
+      const toggled = toggleSelectedGeoData(
+        state.filterStack[geoIdx].datasetIds,
         action.payload
       );
-    },
-    setSelectedGeoData(state, action: PayloadAction<IDatasetID[]>) {
-      state.selectedGeoData = action.payload;
+      if (toggled.length === 0) {
+        state.filterStack.splice(geoIdx, 1);
+      } else {
+        state.filterStack[geoIdx] = {
+          ...state.filterStack[geoIdx],
+          datasetIds: toggled,
+          label: `${toggled.length} map point${toggled.length > 1 ? "s" : ""}`,
+        };
+      }
     },
     setTimeData(state, action: PayloadAction<ITimeData[]>) {
       state.timeData = action.payload;
@@ -80,17 +98,31 @@ const DatasetSlice = createSlice({
     setIsFiltering(state, action: PayloadAction<boolean>) {
       state.isFiltering = action.payload;
     },
-    setActiveKeywordFilter(state, action: PayloadAction<IDatasetID[]>) {
-      state.activeFilters.keyword = action.payload;
+    // Keywords are appended (sequential drill-down: A → B → C).
+    // Geo and time are upserted — only one instance of each is meaningful.
+    pushFilter(state, action: PayloadAction<FilterEntry>) {
+      if (action.payload.type === "keyword") {
+        state.filterStack.push(action.payload);
+      } else {
+        const idx = state.filterStack.findIndex(
+          (e) => e.type === action.payload.type
+        );
+        if (idx >= 0) {
+          state.filterStack[idx] = action.payload;
+        } else {
+          state.filterStack.push(action.payload);
+        }
+      }
     },
-    clearActiveKeywordFilter(state) {
-      state.activeFilters.keyword = null;
+    // Removes ALL entries of the given type (used for full keyword clear, geo clear, time clear).
+    removeFilter(state, action: PayloadAction<FilterEntry["type"]>) {
+      state.filterStack = state.filterStack.filter(
+        (e) => e.type !== action.payload
+      );
     },
-    setActiveTimeFilter(state, action: PayloadAction<IDatasetID[]>) {
-      state.activeFilters.time = action.payload;
-    },
-    clearActiveTimeFilter(state) {
-      state.activeFilters.time = null;
+    // Removes only the last entry — used by the undo listener.
+    popFilter(state) {
+      state.filterStack.pop();
     },
     reset() {
       return initialState;
@@ -102,19 +134,18 @@ export const {
   setDataset,
   setDatasetWithGeo,
   setKeywordData,
-  setGeoData,
   updateSelectedGeoData,
   reset: resetDatasetSlice,
-  setSelectedGeoData,
   setTimeData,
   setChordData,
   setIsFiltering,
-  setActiveKeywordFilter,
-  clearActiveKeywordFilter,
-  setActiveTimeFilter,
-  clearActiveTimeFilter,
+  pushFilter,
+  removeFilter,
+  popFilter,
 } = DatasetSlice.actions;
 
 export const filterByTimeRange = createAction<TemporalCoverage>("dataset/filterByTimeRange");
+export const clearTimeFilter = createAction("dataset/clearTimeFilter");
+export const undoFilter = createAction("dataset/undoFilter");
 
 export default DatasetSlice.reducer;

@@ -54,8 +54,7 @@ export const dataApi = createApi({
           const state = getState() as RootState;
           if (
             state.selectedKeyword.selectedKeyword !== null ||
-            state.dataset.selectedGeoData.length > 0 ||
-            state.dataset.activeFilters.time !== null
+            state.dataset.filterStack.length > 0
           ) return;
           dispatch(setDatasetWithGeo(data.result));
           dispatch(setTimeData(computeTimeData(data.result)));
@@ -70,8 +69,7 @@ export const dataApi = createApi({
           const state = getState() as RootState;
           if (
             state.selectedKeyword.selectedKeyword !== null ||
-            state.dataset.selectedGeoData.length > 0 ||
-            state.dataset.activeFilters.time !== null
+            state.dataset.filterStack.length > 0
           ) return;
           dispatch(setKeywordData(data.result));
         } catch {}
@@ -97,8 +95,7 @@ export const dataApi = createApi({
           const state = getState() as RootState;
           if (
             state.selectedKeyword.selectedKeyword !== null ||
-            state.dataset.selectedGeoData.length > 0 ||
-            state.dataset.activeFilters.time !== null
+            state.dataset.filterStack.length > 0
           ) return;
           dispatch(setChordData(processAuthorData(data.result)));
         } catch {}

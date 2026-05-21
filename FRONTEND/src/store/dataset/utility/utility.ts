@@ -46,28 +46,6 @@ export const toggleSelectedGeoData = (
   }
 };
 
-/** Utility function to update selectedGeoData points to exclude search term related data  */
-export const filterDatasetsIfChanged = (
-  locationData: IGeoData[],
-  selectedGeoDataset: IDatasetID[]
-): IDatasetID[] | null => {
-  const locationDataIds = new Set(locationData.map((data) => data.id));
-
-  const filteredSelectedGeoDataset = selectedGeoDataset.filter((id) =>
-    locationDataIds.has(id)
-  );
-
-  if (
-    filteredSelectedGeoDataset.length === selectedGeoDataset.length &&
-    filteredSelectedGeoDataset.every(
-      (id, index) => id === selectedGeoDataset[index]
-    )
-  ) {
-    return null;
-  }
-
-  return filteredSelectedGeoDataset;
-};
 
 /** utility function to get intersection of two datasetID arrays */
 export const getDatasetIDIntersection = (

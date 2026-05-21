@@ -7,6 +7,7 @@ import { resetDatasetSlice } from "../../store/dataset/datasetSlice";
 import { updateSelectedKeyword } from "../../store/selectedKeyword/selectedKeywordSlice";
 import GridSettingsButton from "./GridSettingsButton";
 import DataSourcesButton from "./DataSourcesButton";
+import FilterBar from "./FilterBar";
 
 const AppBar = (): JSX.Element => {
   const theme = useTheme();
@@ -36,11 +37,12 @@ const AppBar = (): JSX.Element => {
         <RefreshIcon />
       </Fab>
 
-      <Typography variant="h1">
-        <b>Visualisation Enabled Search Application</b>
-      </Typography>
+        <Typography variant="h1">
+          <b>Visualisation Enabled Search Application</b>
+        </Typography>
 
-      <Box>
+      <Box sx={{ display: "flex", alignItems: "center", gap: theme.spacing(2) }}>
+          <FilterBar />
         <Tooltip title="Go to Dashboard">
           <IconButton
             aria-label="go-to-dashboard-button"

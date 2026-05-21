@@ -9,11 +9,13 @@ import {
   setIsFiltering,
   updateSelectedGeoData,
   filterByTimeRange,
-  setActiveKeywordFilter,
-  clearActiveKeywordFilter,
-  setActiveTimeFilter,
+  clearTimeFilter,
+  pushFilter,
+  removeFilter,
+  popFilter,
+  undoFilter,
 } from "store/dataset/datasetSlice";
-import { updateSelectedKeyword } from "store/selectedKeyword/selectedKeywordSlice";
+import { updateSelectedKeyword, setSelectedKeyword } from "store/selectedKeyword/selectedKeywordSlice";
 import {
   computeTimeData,
   processAuthorData,
@@ -32,16 +34,14 @@ interface FetchFilteredDataOpts {
   skipAuthorData?: boolean;
 }
 
-// Intersects all active filter dimensions and returns the resulting dataset IDs.
-// Returns null when no filter is active (caller should repopulate from cache instead).
-// Geo is read from selectedGeoData rather than activeFilters to avoid duplication.
+// Intersects all active filter dimensions from the filterStack.
+// Returns null when the stack is empty (caller should repopulate from cache instead).
 function resolveActiveIds(state: RootState): IDatasetID[] | null {
-  const sets: IDatasetID[][] = [];
-  if (state.dataset.activeFilters.keyword) sets.push(state.dataset.activeFilters.keyword);
-  if (state.dataset.selectedGeoData.length)  sets.push(state.dataset.selectedGeoData);
-  if (state.dataset.activeFilters.time)      sets.push(state.dataset.activeFilters.time);
-  if (sets.length === 0) return null;
-  return sets.reduce((acc, ids) => getDatasetIDIntersection(acc, ids));
+  const { filterStack } = state.dataset;
+  if (filterStack.length === 0) return null;
+  return filterStack
+    .map((e) => e.datasetIds)
+    .reduce((acc, ids) => getDatasetIDIntersection(acc, ids));
 }
 
 async function repopulateFromCache(api: ListenerApi): Promise<void> {
@@ -107,17 +107,17 @@ function registerKeywordListener(): void {
       const keyword = action.payload;
 
       if (keyword) {
-        api.dispatch(setActiveKeywordFilter(keyword.dataset_id));
+        api.dispatch(pushFilter({ type: "keyword", label: keyword.keyword, datasetIds: keyword.dataset_id, meta: { keywordData: keyword } }));
         const state = api.getState();
         const ids = resolveActiveIds(state)!;
-        const hasGeo = state.dataset.selectedGeoData.length > 0;
+        const hasGeo = state.dataset.filterStack.some((e) => e.type === "geo");
         await fetchFilteredData(api, ids, { skipGeoData: hasGeo });
       } else {
-        api.dispatch(clearActiveKeywordFilter());
+        api.dispatch(removeFilter("keyword"));
         const state = api.getState();
         const ids = resolveActiveIds(state);
         if (ids !== null) {
-          const hasGeo = state.dataset.selectedGeoData.length > 0;
+          const hasGeo = state.dataset.filterStack.some((e) => e.type === "geo");
           await fetchFilteredData(api, ids, { skipGeoData: hasGeo });
         } else {
           await repopulateFromCache(api);
@@ -128,8 +128,11 @@ function registerKeywordListener(): void {
 }
 
 function registerGeoListener(): void {
+  // Reacts to both individual point toggles and explicit geo-filter removal (chip bar / GeoFilterCard).
   startAppListening({
-    actionCreator: updateSelectedGeoData,
+    matcher: (action): action is ReturnType<typeof updateSelectedGeoData> | ReturnType<typeof removeFilter> =>
+      updateSelectedGeoData.match(action) ||
+      (removeFilter.match(action) && action.payload === "geo"),
     effect: async (_, api) => {
       api.cancelActiveListeners();
       const state = api.getState();
@@ -140,7 +143,7 @@ function registerGeoListener(): void {
         return;
       }
 
-      const hasGeo = state.dataset.selectedGeoData.length > 0;
+      const hasGeo = state.dataset.filterStack.some((e) => e.type === "geo");
       await fetchFilteredData(api, ids, { skipGeoData: hasGeo });
     },
   });
@@ -162,7 +165,16 @@ function registerTimeRangeListener(): void {
           .unwrap();
 
         const timeIds = getDatasetID(timeResult.result);
-        api.dispatch(setActiveTimeFilter(timeIds));
+        const fmtYear = (d: string | null) =>
+          d ? new Date(d).getFullYear().toString() : "?";
+        api.dispatch(
+          pushFilter({
+            type: "time",
+            label: `${fmtYear(action.payload.start_date)} – ${fmtYear(action.payload.end_date)}`,
+            datasetIds: timeIds,
+            meta: { timeRange: action.payload },
+          })
+        );
 
         const state = api.getState();
         const ids = resolveActiveIds(state);
@@ -175,8 +187,58 @@ function registerTimeRangeListener(): void {
   });
 }
 
+function registerClearTimeFilterListener(): void {
+  startAppListening({
+    actionCreator: clearTimeFilter,
+    effect: async (_, api) => {
+      api.cancelActiveListeners();
+      api.dispatch(removeFilter("time"));
+      const state = api.getState();
+      const ids = resolveActiveIds(state);
+      if (ids === null) {
+        await repopulateFromCache(api);
+        return;
+      }
+      const hasGeo = state.dataset.filterStack.some((e) => e.type === "geo");
+      await fetchFilteredData(api, ids, { skipGeoData: hasGeo });
+    },
+  });
+}
+
+function registerUndoFilterListener(): void {
+  startAppListening({
+    actionCreator: undoFilter,
+    effect: async (_, api) => {
+      api.cancelActiveListeners();
+      const { filterStack } = api.getState().dataset;
+      if (filterStack.length === 0) return;
+
+      const last = filterStack[filterStack.length - 1];
+      api.dispatch(popFilter());
+
+      if (last.type === "keyword") {
+        // Restore selectedKeyword to the previous keyword in the stack (if any).
+        const remaining = api.getState().dataset.filterStack;
+        const prevKeyword = [...remaining].reverse().find((e) => e.type === "keyword");
+        api.dispatch(setSelectedKeyword(prevKeyword?.meta?.keywordData ?? null));
+      }
+
+      const state = api.getState();
+      const ids = resolveActiveIds(state);
+      if (ids === null) {
+        await repopulateFromCache(api);
+        return;
+      }
+      const hasGeo = state.dataset.filterStack.some((e) => e.type === "geo");
+      await fetchFilteredData(api, ids, { skipGeoData: hasGeo });
+    },
+  });
+}
+
 export function registerDataListeners(): void {
   registerKeywordListener();
   registerGeoListener();
   registerTimeRangeListener();
+  registerClearTimeFilterListener();
+  registerUndoFilterListener();
 }
