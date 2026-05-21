@@ -51,8 +51,12 @@ export const dataApi = createApi({
       async onQueryStarted(_, { dispatch, queryFulfilled, getState }) {
         try {
           const { data } = await queryFulfilled;
-          const keyword = (getState() as RootState).selectedKeyword.selectedKeyword;
-          if (keyword) return;
+          const state = getState() as RootState;
+          if (
+            state.selectedKeyword.selectedKeyword !== null ||
+            state.dataset.selectedGeoData.length > 0 ||
+            state.dataset.activeFilters.time !== null
+          ) return;
           dispatch(setDatasetWithGeo(data.result));
           dispatch(setTimeData(computeTimeData(data.result)));
         } catch {}
@@ -63,8 +67,12 @@ export const dataApi = createApi({
       async onQueryStarted(_, { dispatch, queryFulfilled, getState }) {
         try {
           const { data } = await queryFulfilled;
-          const keyword = (getState() as RootState).selectedKeyword.selectedKeyword;
-          if (keyword) return;
+          const state = getState() as RootState;
+          if (
+            state.selectedKeyword.selectedKeyword !== null ||
+            state.dataset.selectedGeoData.length > 0 ||
+            state.dataset.activeFilters.time !== null
+          ) return;
           dispatch(setKeywordData(data.result));
         } catch {}
       },
@@ -86,8 +94,12 @@ export const dataApi = createApi({
       async onQueryStarted(_, { dispatch, queryFulfilled, getState }) {
         try {
           const { data } = await queryFulfilled;
-          const keyword = (getState() as RootState).selectedKeyword.selectedKeyword;
-          if (keyword) return;
+          const state = getState() as RootState;
+          if (
+            state.selectedKeyword.selectedKeyword !== null ||
+            state.dataset.selectedGeoData.length > 0 ||
+            state.dataset.activeFilters.time !== null
+          ) return;
           dispatch(setChordData(processAuthorData(data.result)));
         } catch {}
       },
@@ -104,7 +116,6 @@ export const {
   useGetRelatedKeywordDataMutation,
   useGetRelatedDatasetsMutation,
   useGetTimeDatasetDataMutation,
-  useGetTimeKeywordDataMutation,
   useGetInitialAuthorDataQuery,
   useGetAuthorDataMutation,
 } = dataApi;

@@ -1,6 +1,5 @@
 import { createAction, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import {
-  AuthorData,
   ChordData,
   IDataset,
   IDatasetID,
@@ -11,6 +10,13 @@ import {
 } from "types/appData";
 import { extractGeoData, toggleSelectedGeoData } from "./utility/utility";
 
+// Resolved dataset IDs for each active filter dimension.
+// Geo is excluded here — it is always read directly from selectedGeoData.
+export interface ActiveFilters {
+  keyword: IDatasetID[] | null;
+  time: IDatasetID[] | null;
+}
+
 export interface IDatasetSlice {
   dataset: IDataset[];
   keywordData: IKeywordData[];
@@ -19,6 +25,7 @@ export interface IDatasetSlice {
   timeData: ITimeData[];
   chordData: ChordData[];
   isFiltering: boolean;
+  activeFilters: ActiveFilters;
 }
 
 const initialState: IDatasetSlice = {
@@ -29,6 +36,7 @@ const initialState: IDatasetSlice = {
   timeData: [],
   chordData: [],
   isFiltering: false,
+  activeFilters: { keyword: null, time: null },
 };
 
 const DatasetSlice = createSlice({
@@ -72,6 +80,18 @@ const DatasetSlice = createSlice({
     setIsFiltering(state, action: PayloadAction<boolean>) {
       state.isFiltering = action.payload;
     },
+    setActiveKeywordFilter(state, action: PayloadAction<IDatasetID[]>) {
+      state.activeFilters.keyword = action.payload;
+    },
+    clearActiveKeywordFilter(state) {
+      state.activeFilters.keyword = null;
+    },
+    setActiveTimeFilter(state, action: PayloadAction<IDatasetID[]>) {
+      state.activeFilters.time = action.payload;
+    },
+    clearActiveTimeFilter(state) {
+      state.activeFilters.time = null;
+    },
     reset() {
       return initialState;
     },
@@ -89,6 +109,10 @@ export const {
   setTimeData,
   setChordData,
   setIsFiltering,
+  setActiveKeywordFilter,
+  clearActiveKeywordFilter,
+  setActiveTimeFilter,
+  clearActiveTimeFilter,
 } = DatasetSlice.actions;
 
 export const filterByTimeRange = createAction<TemporalCoverage>("dataset/filterByTimeRange");

@@ -7,9 +7,11 @@ import {
   setChordData,
   setTimeData,
   setIsFiltering,
-  resetDatasetSlice,
   updateSelectedGeoData,
   filterByTimeRange,
+  setActiveKeywordFilter,
+  clearActiveKeywordFilter,
+  setActiveTimeFilter,
 } from "store/dataset/datasetSlice";
 import { updateSelectedKeyword } from "store/selectedKeyword/selectedKeywordSlice";
 import {
@@ -30,22 +32,30 @@ interface FetchFilteredDataOpts {
   skipAuthorData?: boolean;
 }
 
+// Intersects all active filter dimensions and returns the resulting dataset IDs.
+// Returns null when no filter is active (caller should repopulate from cache instead).
+// Geo is read from selectedGeoData rather than activeFilters to avoid duplication.
+function resolveActiveIds(state: RootState): IDatasetID[] | null {
+  const sets: IDatasetID[][] = [];
+  if (state.dataset.activeFilters.keyword) sets.push(state.dataset.activeFilters.keyword);
+  if (state.dataset.selectedGeoData.length)  sets.push(state.dataset.selectedGeoData);
+  if (state.dataset.activeFilters.time)      sets.push(state.dataset.activeFilters.time);
+  if (sets.length === 0) return null;
+  return sets.reduce((acc, ids) => getDatasetIDIntersection(acc, ids));
+}
+
 async function repopulateFromCache(api: ListenerApi): Promise<void> {
   const state = api.getState();
-  const dsCache = dataApi.endpoints.getInitialDatasets.select()(state);
-  const kwCache = dataApi.endpoints.getInitialKeywordData.select()(state);
+  const dsCache   = dataApi.endpoints.getInitialDatasets.select()(state);
+  const kwCache   = dataApi.endpoints.getInitialKeywordData.select()(state);
   const authCache = dataApi.endpoints.getInitialAuthorData.select()(state);
 
   if (dsCache.data?.result) {
     api.dispatch(setDatasetWithGeo(dsCache.data.result));
     api.dispatch(setTimeData(computeTimeData(dsCache.data.result)));
   }
-  if (kwCache.data?.result) {
-    api.dispatch(setKeywordData(kwCache.data.result));
-  }
-  if (authCache.data?.result) {
-    api.dispatch(setChordData(processAuthorData(authCache.data.result)));
-  }
+  if (kwCache.data?.result)   api.dispatch(setKeywordData(kwCache.data.result));
+  if (authCache.data?.result) api.dispatch(setChordData(processAuthorData(authCache.data.result)));
 }
 
 async function fetchFilteredData(
@@ -97,10 +107,21 @@ function registerKeywordListener(): void {
       const keyword = action.payload;
 
       if (keyword) {
-        await fetchFilteredData(api, keyword.dataset_id);
+        api.dispatch(setActiveKeywordFilter(keyword.dataset_id));
+        const state = api.getState();
+        const ids = resolveActiveIds(state)!;
+        const hasGeo = state.dataset.selectedGeoData.length > 0;
+        await fetchFilteredData(api, ids, { skipGeoData: hasGeo });
       } else {
-        api.dispatch(resetDatasetSlice());
-        await repopulateFromCache(api);
+        api.dispatch(clearActiveKeywordFilter());
+        const state = api.getState();
+        const ids = resolveActiveIds(state);
+        if (ids !== null) {
+          const hasGeo = state.dataset.selectedGeoData.length > 0;
+          await fetchFilteredData(api, ids, { skipGeoData: hasGeo });
+        } else {
+          await repopulateFromCache(api);
+        }
       }
     },
   });
@@ -112,23 +133,15 @@ function registerGeoListener(): void {
     effect: async (_, api) => {
       api.cancelActiveListeners();
       const state = api.getState();
-      const selectedGeoData = state.dataset.selectedGeoData;
-      const keyword = state.selectedKeyword.selectedKeyword;
+      const ids = resolveActiveIds(state);
 
-      if (selectedGeoData.length === 0 && !keyword) {
+      if (ids === null) {
+        await repopulateFromCache(api);
         return;
       }
 
-      let ids: IDatasetID[];
-      if (selectedGeoData.length > 0) {
-        ids = keyword
-          ? getDatasetIDIntersection(selectedGeoData, keyword.dataset_id)
-          : selectedGeoData;
-      } else {
-        ids = keyword!.dataset_id;
-      }
-
-      await fetchFilteredData(api, ids, { skipGeoData: true });
+      const hasGeo = state.dataset.selectedGeoData.length > 0;
+      await fetchFilteredData(api, ids, { skipGeoData: hasGeo });
     },
   });
 }
@@ -138,10 +151,6 @@ function registerTimeRangeListener(): void {
     actionCreator: filterByTimeRange,
     effect: async (action, api) => {
       api.cancelActiveListeners();
-      const state = api.getState();
-      const keyword = state.selectedKeyword.selectedKeyword;
-      const selectedGeoData = state.dataset.selectedGeoData;
-
       try {
         const timeResult = await api
           .dispatch(
@@ -152,14 +161,13 @@ function registerTimeRangeListener(): void {
           )
           .unwrap();
 
-        let ids = getDatasetID(timeResult.result);
+        const timeIds = getDatasetID(timeResult.result);
+        api.dispatch(setActiveTimeFilter(timeIds));
 
-        if (keyword) {
-          ids = getDatasetIDIntersection(ids, keyword.dataset_id);
-        }
-        if (selectedGeoData.length) {
-          ids = getDatasetIDIntersection(ids, selectedGeoData);
-        }
+        const state = api.getState();
+        const ids = resolveActiveIds(state);
+
+        if (!ids || ids.length === 0) return;
 
         await fetchFilteredData(api, ids, { skipTimeData: true });
       } catch {}
