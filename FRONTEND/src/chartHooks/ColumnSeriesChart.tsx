@@ -36,6 +36,11 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
   // animation frames don't fire spurious filterByTimeRange actions.
   const isResettingRef = React.useRef(false);
 
+  // Holds the latest props.data so the deferred init can populate the chart
+  // without waiting for a subsequent data change.
+  const initDataRef = React.useRef(props.data);
+  useEffect(() => { initDataRef.current = props.data; }, [props.data]);
+
   // Stable ref to the callback so the chart-init closure never captures a stale value.
   const handleScrollRef = React.useRef(props.handleScroll);
   useEffect(() => {
@@ -224,24 +229,46 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
     cursor.lineY.set("visible", false);
   }
 
-  // Chart initialisation — runs once on mount.
+  // Chart initialisation — deferred so the browser can paint the shell before
+  // amCharts runs. initDataRef holds the latest data so we can populate the chart
+  // immediately after init without waiting for another props.data change.
   useEffect(() => {
-    let root = createRoot("time-chart");
-    let chart = createChart(root);
-    let { xAxis, yAxis } = createAxes(root, chart, props.initialDate);
-    let series = createSeries(root, chart, xAxis, yAxis);
-    let scrollbar = createScrollbar(root, chart, xAxis, props.initialDate);
-    addCursor(root, chart, xAxis);
+    let root: am5.Root | undefined;
+    const id = setTimeout(() => {
+      root = createRoot("time-chart");
+      const chart = createChart(root);
+      const { xAxis, yAxis } = createAxes(root, chart, props.initialDate);
+      const series = createSeries(root, chart, xAxis, yAxis);
+      const scrollbar = createScrollbar(root, chart, xAxis, props.initialDate);
+      addCursor(root, chart, xAxis);
 
-    series.appear(1000, 100);
-    chart.appear(1000, 100);
+      series.appear(1000, 100);
+      chart.appear(1000, 100);
 
-    chartRef.current = chart;
-    scrollbarRef.current = scrollbar;
+      chartRef.current = chart;
+      scrollbarRef.current = scrollbar;
+
+      // Populate with data that arrived while init was pending
+      const data = initDataRef.current;
+      if (data.length) {
+        const mainSeries = chart.series.getIndex(0);
+        const sbSeries = scrollbar.chart.series.getIndex(0);
+        if (mainSeries && sbSeries) {
+          resetRangeRef.current = {
+            start_date: new Date(data[0].date as number).toISOString(),
+            end_date: new Date(data[data.length - 1].date as number).toISOString(),
+          };
+          mainSeries.data.setAll(data.map(({ date, value }) => ({ date, value: value || null })));
+          sbSeries.data.setAll(data);
+          isResettingRef.current = true;
+          chart.zoomOut();
+        }
+      }
+    }, 0);
 
     return () => {
-      root.dispose();
-      chart.dispose();
+      clearTimeout(id);
+      root?.dispose();
     };
   }, []);
 

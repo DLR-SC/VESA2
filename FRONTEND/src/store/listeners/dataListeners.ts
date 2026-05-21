@@ -17,7 +17,7 @@ import {
 } from "store/dataset/datasetSlice";
 import { updateSelectedKeyword, setSelectedKeyword } from "store/selectedKeyword/selectedKeywordSlice";
 import {
-  computeTimeData,
+  computeTimeDataAsync,
   processAuthorData,
   getDatasetID,
   getDatasetIDIntersection,
@@ -52,7 +52,7 @@ async function repopulateFromCache(api: ListenerApi): Promise<void> {
 
   if (dsCache.data?.result) {
     api.dispatch(setDatasetWithGeo(dsCache.data.result));
-    api.dispatch(setTimeData(computeTimeData(dsCache.data.result)));
+    api.dispatch(setTimeData(await computeTimeDataAsync(dsCache.data.result)));
   }
   if (kwCache.data?.result)   api.dispatch(setKeywordData(kwCache.data.result));
   if (authCache.data?.result) api.dispatch(setChordData(processAuthorData(authCache.data.result)));
@@ -85,7 +85,7 @@ async function fetchFilteredData(
     }
 
     if (!skipTimeData) {
-      api.dispatch(setTimeData(computeTimeData(datasetsResult.result)));
+      api.dispatch(setTimeData(await computeTimeDataAsync(datasetsResult.result)));
     }
 
     if (!skipAuthorData) {

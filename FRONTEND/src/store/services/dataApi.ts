@@ -11,7 +11,7 @@ import {
   setChordData,
   setTimeData,
 } from "store/dataset/datasetSlice";
-import { computeTimeData, processAuthorData } from "store/dataset/utility/utility";
+import { computeTimeDataAsync, processAuthorData } from "store/dataset/utility/utility";
 import type { RootState } from "store";
 
 type DatasetResponse = {
@@ -57,7 +57,7 @@ export const dataApi = createApi({
             state.dataset.filterStack.length > 0
           ) return;
           dispatch(setDatasetWithGeo(data.result));
-          dispatch(setTimeData(computeTimeData(data.result)));
+          dispatch(setTimeData(await computeTimeDataAsync(data.result)));
         } catch {}
       },
     }),

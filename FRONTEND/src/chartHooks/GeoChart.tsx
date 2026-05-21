@@ -96,22 +96,31 @@ const GeoChart: React.FC<IGeoChartProps> = ({
     });
   }, [selectedIDs]);
 
-  // Initialize the chart once
+  // Initialize the chart once, deferred so the browser can paint the shell first.
+  // setChart() called inside the timeout triggers re-render; the geoData update
+  // effect will have already run (geoData is derived from props.data on mount),
+  // so the chart update effect fires immediately with data ready.
   useEffect(() => {
-    const root = am5.Root.new("map-chart");
-    root.setThemes([am5themes_Animated.new(root)]);
+    let root: am5.Root | undefined;
+    const id = setTimeout(() => {
+      root = am5.Root.new("map-chart");
+      root.setThemes([am5themes_Animated.new(root)]);
 
-    const mapChart = createChart(root);
-    setChart(mapChart);
+      const mapChart = createChart(root);
+      setChart(mapChart);
 
-    const zoomControl = createZoomControl(root, mapChart, setToggleLegend);
-    mapChart.set("zoomControl", zoomControl);
+      const zoomControl = createZoomControl(root, mapChart, setToggleLegend);
+      mapChart.set("zoomControl", zoomControl);
 
-    createMapPolygonSeries(root, mapChart);
-    createPointSeries(root, mapChart, selectedCoordinate, onPointHover, sourceColorRef, bulletMapRef);
-    createLegends(root, mapChart, legendRef, selectedLegendRef);
+      createMapPolygonSeries(root, mapChart);
+      createPointSeries(root, mapChart, selectedCoordinate, onPointHover, sourceColorRef, bulletMapRef);
+      createLegends(root, mapChart, legendRef, selectedLegendRef);
+    }, 0);
 
-    return () => root.dispose();
+    return () => {
+      clearTimeout(id);
+      root?.dispose();
+    };
   }, []);
 
   // Update legend entries whenever source list changes
