@@ -85,7 +85,7 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
 
       <Box>
         <Typography variant="caption" color="text.disabled" display="block" sx={{ mb: 1 }}>
-          Built-in proxies
+          Sample Data Adapters
         </Typography>
         <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
           {PRESETS.map((preset) => (
@@ -101,7 +101,7 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
           ))}
         </Stack>
         <Typography variant="caption" color="text.disabled">
-          External APIs like PANGAEA and GBIF return data in their own formats. The built-in proxies translate those responses into the VESA Data Adapter schema that the ingestion pipeline expects. Select a preset to auto-fill the endpoint and recommended settings for that source.
+          External APIs like PANGAEA and GBIF return data in their own formats. VESA data adapter translate those responses into the acceptable schema that ingestion pipeline expects
         </Typography>
       </Box>
 
