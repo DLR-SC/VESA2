@@ -11,7 +11,6 @@ import AppBar from "./components/AppBar";
 import { IngestionPage } from "./components/ingestion";
 import { useGetSyncHistoryQuery } from "./store/services/syncApi";
 
-// Global subscription + route guard: redirects "/" to "/setup" when no data has been ingested yet.
 function AppRoutes(): JSX.Element {
   const { data, isLoading } = useGetSyncHistoryQuery();
   const isEmpty = !isLoading && (data?.result?.length ?? 0) === 0;

@@ -13,24 +13,34 @@ interface ITimeSeriesProps {
 function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
   const chartRef = React.useRef<am5xy.XYChart | null>(null);
   const scrollbarRef = React.useRef<am5xy.XYChartScrollbar | null>(null);
-  const customColor = { blue: am5.color(0x6894dc) }; // blue color for the columns
+  const customColor = { blue: am5.color(0x6894dc) };
 
   const [timeRange, setTimeRange] = React.useState<TemporalCoverage>(
     props.initialDate
   );
 
-  // Modularized helper functions
+  // Ref to the main date axis. The dispatch effect uses its zoom position to tell a
+  // programmatic reset (snapped to full: start 0 / end 1) from a real user selection.
+  const xAxisRef = React.useRef<am5xy.DateAxis<am5xy.AxisRenderer> | null>(null);
+
+  // Holds the latest props.data so the deferred init can populate the chart
+  // without waiting for a subsequent data change.
+  const initDataRef = React.useRef(props.data);
+  useEffect(() => { initDataRef.current = props.data; }, [props.data]);
+
+  // Stable ref to the callback so the chart-init closure never captures a stale value.
+  const handleScrollRef = React.useRef(props.handleScroll);
+  useEffect(() => {
+    handleScrollRef.current = props.handleScroll;
+  });
+
   function createRoot(containerId: string): am5.Root {
     let root = am5.Root.new(containerId);
-
-    // Set themes
     root.setThemes([am5themes_Animated.new(root)]);
-
     root.dateFormatter.setAll({
       dateFormat: "yyyy",
       dateFields: ["valueX"],
     });
-
     return root;
   }
 
@@ -123,20 +133,18 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
 
     xAxis.onPrivate("selectionMin", function (value) {
       if (value) {
-        let startDate = new Date(value);
         setTimeRange((prev) => ({
           ...prev,
-          start_date: startDate.toISOString(),
+          start_date: new Date(value).toISOString(),
         }));
       }
     });
 
     xAxis.onPrivate("selectionMax", function (value) {
       if (value) {
-        let endDate = new Date(value);
         setTimeRange((prev) => ({
           ...prev,
-          end_date: endDate.toISOString(),
+          end_date: new Date(value).toISOString(),
         }));
       }
     });
@@ -208,49 +216,70 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
     cursor.lineY.set("visible", false);
   }
 
+  // Chart initialisation — deferred so the browser can paint the shell before
+  // amCharts runs. initDataRef holds the latest data so we can populate the chart
+  // immediately after init without waiting for another props.data change.
   useEffect(() => {
-    let root = createRoot("time-chart");
-    let chart = createChart(root);
-    let { xAxis, yAxis } = createAxes(root, chart, props.initialDate);
-    let series = createSeries(root, chart, xAxis, yAxis);
-    let scrollbar = createScrollbar(root, chart, xAxis, props.initialDate);
-    addCursor(root, chart, xAxis);
+    let root: am5.Root | undefined;
+    const id = setTimeout(() => {
+      root = createRoot("time-chart");
+      const chart = createChart(root);
+      const { xAxis, yAxis } = createAxes(root, chart, props.initialDate);
+      const series = createSeries(root, chart, xAxis, yAxis);
+      const scrollbar = createScrollbar(root, chart, xAxis, props.initialDate);
+      addCursor(root, chart, xAxis);
 
-    series.appear(1000, 100);
-    chart.appear(1000, 100);
+      series.appear(1000, 100);
+      chart.appear(1000, 100);
 
-    chartRef.current = chart;
-    scrollbarRef.current = scrollbar;
+      chartRef.current = chart;
+      scrollbarRef.current = scrollbar;
+      xAxisRef.current = xAxis;
+
+      // Populate with data that arrived while init was pending
+      const data = initDataRef.current;
+      if (data.length) {
+        const mainSeries = chart.series.getIndex(0);
+        const sbSeries = scrollbar.chart.series.getIndex(0);
+        if (mainSeries && sbSeries) {
+          mainSeries.data.setAll(data.map(({ date, value }) => ({ date, value: value || null })));
+          sbSeries.data.setAll(data);
+          xAxis.zoom(0, 1, 0);
+        }
+      }
+    }, 0);
 
     return () => {
-      root.dispose();
-      chart.dispose();
-    }; // Cleanup function
+      clearTimeout(id);
+      root?.dispose();
+    };
   }, []);
 
-  /** Setting the data for series and scrollbar series */
+  // Data update — fires whenever the Redux timeData slice changes. Snap back to the
+  // full extent instantly (duration 0) so the reset emits no animation frames the
+  // dispatch effect could mistake for a user selection.
   useEffect(() => {
-    if (chartRef.current && scrollbarRef.current) {
+    if (chartRef.current && scrollbarRef.current && xAxisRef.current) {
       const mainSeries = chartRef.current.series.getIndex(0);
       const sbSeries = scrollbarRef.current.chart.series.getIndex(0);
 
       if (mainSeries && sbSeries) {
-        // replacing 0 values with null for columnSeries
-        const processedData = props.data.map(({ date, value }) => ({
-          date,
-          value: value || null,
-        }));
-
-        mainSeries.data.setAll(processedData);
+        mainSeries.data.setAll(props.data.map(({ date, value }) => ({ date, value: value || null })));
         sbSeries.data.setAll(props.data);
       }
 
-      chartRef.current.zoomOut();
+      xAxisRef.current.zoom(0, 1, 0);
     }
   }, [props.data]);
 
+  // Propagate the selected range to the container — but skip the programmatic reset,
+  // which leaves the axis at full zoom (start 0 / end 1). The null check also covers
+  // the deferred mount, before the chart exists.
   useEffect(() => {
-    props.handleScroll(timeRange);
+    const axis = xAxisRef.current;
+    if (!axis) return;
+    if (axis.get("start") === 0 && axis.get("end") === 1) return;
+    handleScrollRef.current(timeRange);
   }, [timeRange]);
 
   return <div id="time-chart" className="chart_div" />;

@@ -13,7 +13,6 @@ function MainContent(): JSX.Element {
 
   const theme = useTheme();
 
-  // Transition styles
   const styles = {
     transitionStyles: {
       transition: theme.transitions.create("all", {
@@ -33,7 +32,7 @@ function MainContent(): JSX.Element {
 
   return (
     <Box flex={1}>
-          <ChartsContainer />
+      <ChartsContainer />
     </Box>
   );
 }

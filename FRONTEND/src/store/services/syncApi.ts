@@ -6,6 +6,8 @@ import {
   ISyncStartRequest,
   ISyncStartResponse,
   ISyncStopResponse,
+  ISyncResumeRequest,
+  ISyncResumeResponse,
   ISyncHistoryResponse,
 } from "types/appData";
 
@@ -40,6 +42,14 @@ export const syncApi = createApi({
       }),
       invalidatesTags: ['Sync'],
     }),
+    resumeSync: builder.mutation<ISyncResumeResponse, ISyncResumeRequest>({
+      query: (req) => ({
+        url: "sync/resume",
+        method: "POST",
+        body: req,
+      }),
+      invalidatesTags: ['Sync'],
+    }),
     getSyncHistory: builder.query<ISyncHistoryResponse, void>({
       query: () => "sync/history",
       providesTags: ['Sync'],
@@ -52,5 +62,6 @@ export const {
   useStartSyncMutation,
   useGetSyncStatusQuery,
   useStopSyncMutation,
+  useResumeSyncMutation,
   useGetSyncHistoryQuery,
 } = syncApi;

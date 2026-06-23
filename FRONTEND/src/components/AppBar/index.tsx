@@ -2,24 +2,19 @@ import { Fab, Typography, Box, useTheme, Tooltip, IconButton } from "@mui/materi
 import RefreshIcon from "@mui/icons-material/Refresh";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import { useNavigate } from "react-router-dom";
-import { useDatafill } from "../../hooks/useDatafill";
 import { useAppDispatch } from "../../store/hooks";
-import { resetDatasetSlice } from "../../store/dataset/datasetSlice";
-import { resetSelectedKeyword } from "../../store/selectedKeyword/selectedKeywordSlice";
+import { hardReset } from "../../store";
 import GridSettingsButton from "./GridSettingsButton";
-import HelpButton from "./HelpButton";
 import DataSourcesButton from "./DataSourcesButton";
+import FilterBar from "./FilterBar";
 
 const AppBar = (): JSX.Element => {
   const theme = useTheme();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { initialSetterBundle } = useDatafill();
 
   const handleReset = () => {
-    dispatch(resetSelectedKeyword());
-    dispatch(resetDatasetSlice());
-    initialSetterBundle();
+    dispatch(hardReset());
   };
 
   return (
@@ -40,11 +35,12 @@ const AppBar = (): JSX.Element => {
         <RefreshIcon />
       </Fab>
 
-      <Typography variant="h1">
-        <b>Visualisation Enabled Search Application</b>
-      </Typography>
+        <Typography variant="h1">
+          <b>Visualisation Enabled Search Application</b>
+        </Typography>
 
-      <Box>
+      <Box sx={{ display: "flex", alignItems: "center", gap: theme.spacing(2) }}>
+          <FilterBar />
         <Tooltip title="Go to Dashboard">
           <IconButton
             aria-label="go-to-dashboard-button"
@@ -56,7 +52,6 @@ const AppBar = (): JSX.Element => {
         </Tooltip>
         <DataSourcesButton />
         <GridSettingsButton />
-        {/* <HelpButton /> */}
       </Box>
     </Box>
   );

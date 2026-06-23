@@ -13,55 +13,51 @@ const NodeChart: React.FC<INodeChartProps> = ({ data }) => {
     null
   );
 
+  // Deferred init — browser paints the shell before amCharts runs.
+  // setChartSeries() inside the timeout triggers a re-render; the data effect
+  // fires with both chartSeries and data ready at that point.
   useEffect(() => {
-    let root = am5.Root.new("chartdiv");
+    let root: am5.Root | undefined;
+    const id = setTimeout(() => {
+      root = am5.Root.new("chartdiv");
+      root.setThemes([am5themes_Animated.new(root)]);
 
-    // Set themes
-    // https://www.amcharts.com/docs/v5/concepts/themes/
-    root.setThemes([am5themes_Animated.new(root)]);
-    
-    // create zoomable container for nodecharts
-    let zoomableContainer = root.container.children.push(
-      am5.ZoomableContainer.new(root, {
-        width: am5.percent(100),
-        height: am5.percent(100),
-        maxZoomLevel: 3,
-      })
-    );
+      const zoomableContainer = root.container.children.push(
+        am5.ZoomableContainer.new(root, {
+          width: am5.percent(100),
+          height: am5.percent(100),
+          maxZoomLevel: 3,
+        })
+      );
 
-    let zoomTools = zoomableContainer.children.push(
-      am5.ZoomTools.new(root, {
-        target: zoomableContainer,
-      })
-    );
+      zoomableContainer.children.push(
+        am5.ZoomTools.new(root, { target: zoomableContainer })
+      );
 
-    // Create series
-    // https://www.amcharts.com/docs/v5/charts/flow-charts/
-    let series = zoomableContainer.contents.children.push(
-      am5flow.ChordDirected.new(root, {
-        startAngle: 80,
-        padAngle: 1,
-        linkHeadRadius: undefined,
-        sourceIdField: "from",
-        targetIdField: "to",
-        valueField: "value",
-      })
-    );
+      const series = zoomableContainer.contents.children.push(
+        am5flow.ChordDirected.new(root, {
+          startAngle: 80,
+          padAngle: 1,
+          linkHeadRadius: undefined,
+          sourceIdField: "from",
+          targetIdField: "to",
+          valueField: "value",
+        })
+      );
 
-    series.nodes.labels.template.setAll({
-      textType: "radial",
-      centerX: 0,
-      fontSize: 7,
-    });
+      series.nodes.labels.template.setAll({
+        textType: "radial",
+        centerX: 0,
+        fontSize: 7,
+      });
 
-    series.links.template.set("fillStyle", "source");
-
-    setChartSeries(series);
-
-    series.appear(1000, 100);
+      series.links.template.set("fillStyle", "source");
+      setChartSeries(series);
+      series.appear(1000, 100);
+    }, 0);
 
     return () => {
-      series?.dispose();
+      clearTimeout(id);
       root?.dispose();
     };
   }, []);

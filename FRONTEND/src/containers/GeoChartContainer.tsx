@@ -1,17 +1,13 @@
 import { CircularProgress } from "@mui/material";
 import GeoChart from "../chartHooks/GeoChart";
-import { useDatafill } from "../hooks/useDatafill";
-import React from "react";
-import {
-  setSelectedGeoData,
-  updateSelectedGeoData,
-} from "../store/dataset/datasetSlice";
-import { filterDatasetsIfChanged } from "../store/dataset/utility/utility";
+import { updateSelectedGeoData } from "../store/dataset/datasetSlice";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { useGetInitialDatasetsQuery } from "../store/services/dataApi";
 import { IContainerProps, IDatasetID, IPointHoverHandler } from "types/appData";
 import CenteredCard from "../components/CenteredCard";
 import EmptyDatasetCard from "../components/EmptyDatasetCard";
+
+const EMPTY_GEO_IDS: IDatasetID[] = [];
 
 interface IGeoChartContainer extends IContainerProps {
   handlePointerHover: IPointHoverHandler;
@@ -21,33 +17,13 @@ function GeoChartContainer(props: IGeoChartContainer): JSX.Element {
   const { isFetching } = useGetInitialDatasetsQuery();
   const locationData = useAppSelector((state) => state.dataset.geoData);
   const selectedGeoData = useAppSelector(
-    (state) => state.dataset.selectedGeoData
-  );
-  const selectedKeywordObject = useAppSelector(
-    (state) => state.selectedKeyword.selectedKeyword
+    (state) => state.dataset.filterStack.find((e) => e.type === "geo")?.datasetIds ?? EMPTY_GEO_IDS
   );
   const dispatch = useAppDispatch();
 
   const handleCoordinateSelection = (id: IDatasetID) => {
     dispatch(updateSelectedGeoData(id));
   };
-
-  const { compareAndResetAgainstGeoData } = useDatafill();
-
-  React.useEffect(() => {
-    compareAndResetAgainstGeoData(selectedGeoData);
-  }, [selectedGeoData]);
-
-  React.useEffect(() => {
-    if (selectedKeywordObject) {
-      const updateSelectedGeoData = filterDatasetsIfChanged(
-        locationData,
-        selectedGeoData
-      );
-      if (updateSelectedGeoData)
-        dispatch(setSelectedGeoData(updateSelectedGeoData));
-    }
-  }, [locationData]);
 
   if (isFetching) {
     return (
