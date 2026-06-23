@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   Badge,
   Box,
-  Divider,
   IconButton,
   Popover,
   Stack,
@@ -19,15 +18,9 @@ import { undoFilter } from "../../store/dataset/datasetSlice";
 import type { FilterEntry } from "types/appData";
 
 const TYPE_ICON: Record<FilterEntry["type"], React.ReactElement> = {
-  keyword: <LocalOfferIcon sx={{ fontSize: 13 }} />,
-  geo:     <RoomIcon sx={{ fontSize: 13 }} />,
-  time:    <DateRangeIcon sx={{ fontSize: 13 }} />,
-};
-
-const TYPE_COLOR: Record<FilterEntry["type"], string> = {
-  keyword: "primary.main",
-  geo:     "secondary.main",
-  time:    "warning.main",
+  keyword: <LocalOfferIcon sx={{ fontSize: 16 }} />,
+  geo:     <RoomIcon sx={{ fontSize: 16 }} />,
+  time:    <DateRangeIcon sx={{ fontSize: 16 }} />,
 };
 
 const FilterBar = () => {
@@ -59,48 +52,26 @@ const FilterBar = () => {
         open={Boolean(anchor)}
         anchorEl={anchor}
         onClose={() => setAnchor(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        transformOrigin={{ vertical: "top", horizontal: "center" }}
-        slotProps={{ paper: { sx: { mt: 1 } } }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        PaperProps={{
+          elevation: 0,
+          variant: "outlined",
+          sx: { width: 280, borderRadius: 2, mt: 1 },
+        }}
       >
-        <Box sx={{ p: 1.5, minWidth: 220 }}>
-          <Typography variant="overline" color="text.secondary">
-            Filter History
-          </Typography>
-          <Divider sx={{ mt: 0.5, mb: 1 }} />
-          <Stack spacing={0.75}>
-            {filterStack.map((entry, i) => (
-              <Box
-                key={entry.type}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  px: 0.5,
-                  opacity: i === filterStack.length - 1 ? 1 : 0.55,
-                }}
-              >
-                <Typography variant="caption" color="text.disabled" sx={{ minWidth: 14, textAlign: "right" }}>
-                  {i + 1}
-                </Typography>
-                <Box sx={{ color: TYPE_COLOR[entry.type], display: "flex" }}>
+        <Box sx={{ px: 3, pt: 3, pb: 2 }}>
+          <Typography variant="h3" sx={{ mb: 2 }}>Active Filters</Typography>
+          <Stack spacing={1.5}>
+            {filterStack.map((entry) => (
+              <Box key={entry.type} sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Box sx={{ color: "text.secondary", display: "flex" }}>
                   {TYPE_ICON[entry.type]}
                 </Box>
-                <Typography variant="body2" sx={{ flex: 1 }}>
-                  {entry.label}
-                </Typography>
-                {i === filterStack.length - 1 && (
-                  <Typography variant="caption" color="text.disabled">
-                    ← last
-                  </Typography>
-                )}
+                <Typography variant="body2">{entry.label}</Typography>
               </Box>
             ))}
           </Stack>
-          <Divider sx={{ mt: 1, mb: 0.5 }} />
-          <Typography variant="caption" color="text.disabled">
-            Undo removes the most recent filter
-          </Typography>
         </Box>
       </Popover>
     </Box>

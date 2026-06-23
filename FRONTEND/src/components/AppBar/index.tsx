@@ -3,8 +3,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch } from "../../store/hooks";
-import { resetDatasetSlice } from "../../store/dataset/datasetSlice";
-import { updateSelectedKeyword } from "../../store/selectedKeyword/selectedKeywordSlice";
+import { hardReset } from "../../store";
 import GridSettingsButton from "./GridSettingsButton";
 import DataSourcesButton from "./DataSourcesButton";
 import FilterBar from "./FilterBar";
@@ -15,8 +14,7 @@ const AppBar = (): JSX.Element => {
   const dispatch = useAppDispatch();
 
   const handleReset = () => {
-    dispatch(updateSelectedKeyword(null));
-    dispatch(resetDatasetSlice());
+    dispatch(hardReset());
   };
 
   return (

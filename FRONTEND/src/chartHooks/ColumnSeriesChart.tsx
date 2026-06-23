@@ -10,13 +10,6 @@ interface ITimeSeriesProps {
   initialDate: TemporalCoverage;
 }
 
-// Returns true when two ISO date strings are within one day of each other.
-// Used to distinguish a programmatic zoomOut() reset from a genuine user scroll.
-function withinOneDay(a: string | null, b: string | null): boolean {
-  if (!a || !b) return false;
-  return Math.abs(new Date(a).getTime() - new Date(b).getTime()) <= 86_400_000;
-}
-
 function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
   const chartRef = React.useRef<am5xy.XYChart | null>(null);
   const scrollbarRef = React.useRef<am5xy.XYChartScrollbar | null>(null);
@@ -26,15 +19,9 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
     props.initialDate
   );
 
-  // The date range that zoomOut() will settle to after the latest data update.
-  // Updated before every programmatic data.setAll() so useEffect([timeRange]) can
-  // distinguish the axis reset from a genuine user scroll.
-  const resetRangeRef = React.useRef<TemporalCoverage>(props.initialDate);
-
-  // Set to true before programmatic zoomOut(); cleared once the axis settles back to
-  // the reset range. While true, useEffect([timeRange]) skips dispatch so the
-  // animation frames don't fire spurious filterByTimeRange actions.
-  const isResettingRef = React.useRef(false);
+  // Ref to the main date axis. The dispatch effect uses its zoom position to tell a
+  // programmatic reset (snapped to full: start 0 / end 1) from a real user selection.
+  const xAxisRef = React.useRef<am5xy.DateAxis<am5xy.AxisRenderer> | null>(null);
 
   // Holds the latest props.data so the deferred init can populate the chart
   // without waiting for a subsequent data change.
@@ -247,6 +234,7 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
 
       chartRef.current = chart;
       scrollbarRef.current = scrollbar;
+      xAxisRef.current = xAxis;
 
       // Populate with data that arrived while init was pending
       const data = initDataRef.current;
@@ -254,14 +242,9 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
         const mainSeries = chart.series.getIndex(0);
         const sbSeries = scrollbar.chart.series.getIndex(0);
         if (mainSeries && sbSeries) {
-          resetRangeRef.current = {
-            start_date: new Date(data[0].date as number).toISOString(),
-            end_date: new Date(data[data.length - 1].date as number).toISOString(),
-          };
           mainSeries.data.setAll(data.map(({ date, value }) => ({ date, value: value || null })));
           sbSeries.data.setAll(data);
-          isResettingRef.current = true;
-          chart.zoomOut();
+          xAxis.zoom(0, 1, 0);
         }
       }
     }, 0);
@@ -272,51 +255,31 @@ function ColumnSeriesChart(props: ITimeSeriesProps): JSX.Element {
     };
   }, []);
 
-  // Data update — fires whenever the Redux timeData slice changes.
-  // Records the new full extent as the "reset range" BEFORE calling zoomOut() so
-  // useEffect([timeRange]) can distinguish the programmatic axis reset from user scroll.
+  // Data update — fires whenever the Redux timeData slice changes. Snap back to the
+  // full extent instantly (duration 0) so the reset emits no animation frames the
+  // dispatch effect could mistake for a user selection.
   useEffect(() => {
-    if (chartRef.current && scrollbarRef.current) {
-      if (props.data.length) {
-        resetRangeRef.current = {
-          start_date: new Date(props.data[0].date as number).toISOString(),
-          end_date: new Date(props.data[props.data.length - 1].date as number).toISOString(),
-        };
-      }
-
+    if (chartRef.current && scrollbarRef.current && xAxisRef.current) {
       const mainSeries = chartRef.current.series.getIndex(0);
       const sbSeries = scrollbarRef.current.chart.series.getIndex(0);
 
       if (mainSeries && sbSeries) {
-        const processedData = props.data.map(({ date, value }) => ({
-          date,
-          value: value || null,
-        }));
-        mainSeries.data.setAll(processedData);
+        mainSeries.data.setAll(props.data.map(({ date, value }) => ({ date, value: value || null })));
         sbSeries.data.setAll(props.data);
       }
 
-      isResettingRef.current = true;
-      chartRef.current.zoomOut();
+      xAxisRef.current.zoom(0, 1, 0);
     }
   }, [props.data]);
 
-  // Propagate timeRange to the container — but ONLY for genuine user interactions.
-  // While isResettingRef is set, we're inside a programmatic zoomOut() animation;
-  // suppress all dispatches until the axis settles back to the reset range.
+  // Propagate the selected range to the container — but skip the programmatic reset,
+  // which leaves the axis at full zoom (start 0 / end 1). The null check also covers
+  // the deferred mount, before the chart exists.
   useEffect(() => {
-    const isReset =
-      withinOneDay(timeRange.start_date, resetRangeRef.current.start_date) &&
-      withinOneDay(timeRange.end_date, resetRangeRef.current.end_date);
-
-    if (isResettingRef.current) {
-      if (isReset) isResettingRef.current = false;
-      return;
-    }
-
-    if (!isReset) {
-      handleScrollRef.current(timeRange);
-    }
+    const axis = xAxisRef.current;
+    if (!axis) return;
+    if (axis.get("start") === 0 && axis.get("end") === 1) return;
+    handleScrollRef.current(timeRange);
   }, [timeRange]);
 
   return <div id="time-chart" className="chart_div" />;

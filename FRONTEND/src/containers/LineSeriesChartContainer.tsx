@@ -23,7 +23,9 @@ function LineSeriesChartContainer(props: IContainerProps): JSX.Element {
     }, 500)
   ).current;
 
-  if (isFetching) {
+  // timeData is null until the worker has produced a result (even an empty one), so
+  // spin through both the HTTP fetch and the worker phase — empty result != pending.
+  if (isFetching || timeData === null) {
     return (
       <CenteredCard>
         <CircularProgress size={60} />
@@ -39,16 +41,14 @@ function LineSeriesChartContainer(props: IContainerProps): JSX.Element {
     : new Date("2030-01-01");
 
   return timeData.length ? (
-    <>
-      <ColumnSeriesChart
-        data={timeData}
-        handleScroll={debouncedHandleScroll}
-        initialDate={{
-          start_date: convertToDateString(firstDate),
-          end_date: convertToDateString(lastDate),
-        }}
-      />
-    </>
+    <ColumnSeriesChart
+      data={timeData}
+      handleScroll={debouncedHandleScroll}
+      initialDate={{
+        start_date: convertToDateString(firstDate),
+        end_date: convertToDateString(lastDate),
+      }}
+    />
   ) : (
     <EmptyDatasetCard />
   );

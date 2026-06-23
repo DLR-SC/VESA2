@@ -136,6 +136,13 @@ export const processAuthorData = (data: AuthorData[]): ChordData[] => {
     }
   }
 
+  const pairedAuthors = new Set<string>();
+  for (const key of pairDatasets.keys()) {
+    const dashIdx = key.indexOf("-");
+    pairedAuthors.add(key.slice(0, dashIdx));
+    pairedAuthors.add(key.slice(dashIdx + 1));
+  }
+
   const formattedData: ChordData[] = [];
   for (const [key, shared] of pairDatasets) {
     const dashIdx = key.indexOf("-");
@@ -144,6 +151,13 @@ export const processAuthorData = (data: AuthorData[]): ChordData[] => {
       to: key.slice(dashIdx + 1),
       value: shared.size,
     });
+  }
+
+  // Authors with no co-authorship pairs get a self-link so their node is visible.
+  for (const { author, datasets } of data) {
+    if (topAuthorSet.has(author) && !pairedAuthors.has(author)) {
+      formattedData.push({ from: author, to: author, value: datasets.length });
+    }
   }
 
   return formattedData;

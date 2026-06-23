@@ -16,7 +16,7 @@ export interface IDatasetSlice {
   keywordData: IKeywordData[];
   geoData: IGeoData[];
   filterStack: FilterEntry[];
-  timeData: ITimeData[];
+  timeData: ITimeData[] | null; // null = not computed yet; [] = computed, no temporal data
   chordData: ChordData[];
   isFiltering: boolean;
 }
@@ -26,7 +26,7 @@ const initialState: IDatasetSlice = {
   keywordData: [],
   geoData: [],
   filterStack: [],
-  timeData: [],
+  timeData: null,
   chordData: [],
   isFiltering: false,
 };
