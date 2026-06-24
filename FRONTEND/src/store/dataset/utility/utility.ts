@@ -5,8 +5,38 @@ import {
   IDataset,
   IDatasetID,
   IGeoData,
+  IKeywordData,
   ITimeData,
 } from "types/appData";
+
+// Hides records belonging to disconnected source prefixes across every chart.
+// Records carry the prefix directly; keyword/author data only carry dataset ids,
+// so we derive the hidden-id set from the records and prune by membership.
+export const applySourceFilter = (
+  data: { datasets?: IDataset[]; keywords?: IKeywordData[]; authors?: AuthorData[] },
+  disconnected: string[]
+): { datasets: IDataset[]; keywords: IKeywordData[]; authors: AuthorData[] } => {
+  const datasets = data.datasets ?? [];
+  const keywords = data.keywords ?? [];
+  const authors = data.authors ?? [];
+  if (disconnected.length === 0) return { datasets, keywords, authors };
+
+  const hidden = new Set(disconnected);
+  const hiddenIds = new Set(
+    datasets.filter((d) => hidden.has(d.dataset_source_prefix)).map((d) => d.id)
+  );
+
+  return {
+    datasets: datasets.filter((d) => !hidden.has(d.dataset_source_prefix)),
+    keywords: keywords
+      .map((k) => ({ ...k, dataset_id: k.dataset_id.filter((id) => !hiddenIds.has(id)) }))
+      .filter((k) => k.dataset_id.length > 0)
+      .map((k) => ({ ...k, count: k.dataset_id.length })),
+    authors: authors
+      .map((a) => ({ ...a, datasets: a.datasets.filter((id) => !hiddenIds.has(id)) }))
+      .filter((a) => a.datasets.length > 0),
+  };
+};
 
 export const extractGeoData = (datasets: IDataset[]): IGeoData[] => {
   const hasValidLocation = (

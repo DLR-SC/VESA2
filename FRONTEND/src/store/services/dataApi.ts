@@ -5,14 +5,6 @@ import {
   IKeywordData,
   TemporalCoverage,
 } from "types/appData";
-import {
-  setDatasetWithGeo,
-  setKeywordData,
-  setChordData,
-  setTimeData,
-} from "store/dataset/datasetSlice";
-import { computeTimeDataAsync, processAuthorData } from "store/dataset/utility/utility";
-import type { RootState } from "store";
 
 type DatasetResponse = {
   result: IDataset[];
@@ -48,32 +40,9 @@ export const dataApi = createApi({
   endpoints: (builder) => ({
     getInitialDatasets: builder.query<DatasetResponse, void>({
       query: () => "main/all",
-      async onQueryStarted(_, { dispatch, queryFulfilled, getState }) {
-        try {
-          const { data } = await queryFulfilled;
-          const state = getState() as RootState;
-          if (
-            state.selectedKeyword.selectedKeyword !== null ||
-            state.dataset.filterStack.length > 0
-          ) return;
-          dispatch(setDatasetWithGeo(data.result));
-          dispatch(setTimeData(await computeTimeDataAsync(data.result)));
-        } catch {}
-      },
     }),
     getInitialKeywordData: builder.query<KeywordDataResponse, void>({
       query: () => "keywords/all",
-      async onQueryStarted(_, { dispatch, queryFulfilled, getState }) {
-        try {
-          const { data } = await queryFulfilled;
-          const state = getState() as RootState;
-          if (
-            state.selectedKeyword.selectedKeyword !== null ||
-            state.dataset.filterStack.length > 0
-          ) return;
-          dispatch(setKeywordData(data.result));
-        } catch {}
-      },
     }),
     getRelatedKeywordData: builder.mutation<KeywordDataResponse, postDataRequestType>({
       query: (req) => ({ url: "keywords/", method: "POST", body: req }),
@@ -89,17 +58,6 @@ export const dataApi = createApi({
     }),
     getInitialAuthorData: builder.query<AuthorDataResponse, void>({
       query: () => "author/all",
-      async onQueryStarted(_, { dispatch, queryFulfilled, getState }) {
-        try {
-          const { data } = await queryFulfilled;
-          const state = getState() as RootState;
-          if (
-            state.selectedKeyword.selectedKeyword !== null ||
-            state.dataset.filterStack.length > 0
-          ) return;
-          dispatch(setChordData(processAuthorData(data.result)));
-        } catch {}
-      },
     }),
     getAuthorData: builder.mutation<AuthorDataResponse, postAuthorDataRequestType>({
       query: (req) => ({ url: "author/", method: "POST", body: req }),

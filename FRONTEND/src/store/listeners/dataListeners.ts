@@ -1,5 +1,6 @@
-import type { ListenerEffectAPI } from "@reduxjs/toolkit";
+import { isAnyOf, type ListenerEffectAPI } from "@reduxjs/toolkit";
 import { dataApi } from "store/services/dataApi";
+import { toggleSourceConnection } from "store/ui/uiSlice";
 import {
   setDataset,
   setDatasetWithGeo,
@@ -17,6 +18,7 @@ import {
 } from "store/dataset/datasetSlice";
 import { updateSelectedKeyword, setSelectedKeyword } from "store/selectedKeyword/selectedKeywordSlice";
 import {
+  applySourceFilter,
   computeTimeDataAsync,
   processAuthorData,
   getDatasetID,
@@ -50,12 +52,22 @@ async function repopulateFromCache(api: ListenerApi): Promise<void> {
   const kwCache   = dataApi.endpoints.getInitialKeywordData.select()(state);
   const authCache = dataApi.endpoints.getInitialAuthorData.select()(state);
 
+  const { datasets, keywords, authors } = applySourceFilter(
+    { datasets: dsCache.data?.result, keywords: kwCache.data?.result, authors: authCache.data?.result },
+    state.ui.disconnectedSources
+  );
+
+  // Compute the slow part before any dispatch, then bail if a newer run superseded us —
+  // otherwise this stale run's dispatches clobber the fresher filtered view (review finding).
+  const timeData = dsCache.data?.result ? await computeTimeDataAsync(datasets) : null;
+  if (api.signal.aborted) return;
+
   if (dsCache.data?.result) {
-    api.dispatch(setDatasetWithGeo(dsCache.data.result));
-    api.dispatch(setTimeData(await computeTimeDataAsync(dsCache.data.result)));
+    api.dispatch(setDatasetWithGeo(datasets));
+    api.dispatch(setTimeData(timeData!));
   }
-  if (kwCache.data?.result)   api.dispatch(setKeywordData(kwCache.data.result));
-  if (authCache.data?.result) api.dispatch(setChordData(processAuthorData(authCache.data.result)));
+  if (kwCache.data?.result)   api.dispatch(setKeywordData(keywords));
+  if (authCache.data?.result) api.dispatch(setChordData(processAuthorData(authors)));
 }
 
 async function fetchFilteredData(
@@ -76,23 +88,38 @@ async function fetchFilteredData(
         .unwrap(),
     ]);
 
-    api.dispatch(setKeywordData(keywordsResult.result));
+    if (api.signal.aborted) return; // superseded by a newer run — don't clobber its result
+
+    const disconnected = api.getState().ui.disconnectedSources;
+    const { datasets, keywords } = applySourceFilter(
+      { datasets: datasetsResult.result, keywords: keywordsResult.result },
+      disconnected
+    );
+
+    api.dispatch(setKeywordData(keywords));
 
     if (skipGeoData) {
-      api.dispatch(setDataset(datasetsResult.result));
+      api.dispatch(setDataset(datasets));
     } else {
-      api.dispatch(setDatasetWithGeo(datasetsResult.result));
+      api.dispatch(setDatasetWithGeo(datasets));
     }
 
     if (!skipTimeData) {
-      api.dispatch(setTimeData(await computeTimeDataAsync(datasetsResult.result)));
+      const timeData = await computeTimeDataAsync(datasets);
+      if (api.signal.aborted) return;
+      api.dispatch(setTimeData(timeData));
     }
 
     if (!skipAuthorData) {
       const authorResult = await api
         .dispatch(dataApi.endpoints.getAuthorData.initiate({ keys: datasetIds }))
         .unwrap();
-      api.dispatch(setChordData(processAuthorData(authorResult.result)));
+      if (api.signal.aborted) return;
+      const { authors } = applySourceFilter(
+        { datasets: datasetsResult.result, authors: authorResult.result },
+        disconnected
+      );
+      api.dispatch(setChordData(processAuthorData(authors)));
     }
   } finally {
     api.dispatch(setIsFiltering(false));
@@ -235,7 +262,38 @@ function registerUndoFilterListener(): void {
   });
 }
 
+// Owns base-view population: fires when the initial queries land (so the persisted
+// disconnect filter applies on first paint) and when a source is toggled.
+// ponytail: repopulates once per initial query on cold load — 3 worker time-computes
+// over identical data; debounce only if it shows up in a profile.
+function registerBaseDataListener(): void {
+  startAppListening({
+    matcher: isAnyOf(
+      dataApi.endpoints.getInitialDatasets.matchFulfilled,
+      dataApi.endpoints.getInitialKeywordData.matchFulfilled,
+      dataApi.endpoints.getInitialAuthorData.matchFulfilled,
+      toggleSourceConnection
+    ),
+    effect: async (action, api) => {
+      // Supersede any earlier base run still in flight, so its post-await dispatches
+      // (which see api.signal.aborted) bail instead of clobbering this fresher run.
+      api.cancelActiveListeners();
+      const state = api.getState();
+      const ids = resolveActiveIds(state);
+      if (ids === null) {
+        // No active filter — rebuild the base view (filtered) from cache.
+        await repopulateFromCache(api);
+      } else if (toggleSourceConnection.match(action)) {
+        // A drill-down is active and the user toggled a source — re-run it through the filter.
+        const hasGeo = state.dataset.filterStack.some((e) => e.type === "geo");
+        await fetchFilteredData(api, ids, { skipGeoData: hasGeo });
+      }
+    },
+  });
+}
+
 export function registerDataListeners(): void {
+  registerBaseDataListener();
   registerKeywordListener();
   registerGeoListener();
   registerTimeRangeListener();
