@@ -66,6 +66,12 @@ export class SyncOrchestrator {
     return this.state;
   }
 
+  // Clears stale in-memory state so /sync/status doesn't surface a deleted job once SyncLogs is empty.
+  public resetState(): void {
+    this.state = { status: 'idle', processed: 0, total: 0, current_prefix: '' };
+    this.abortSignal = false;
+  }
+
   public async getLastJobStatus(): Promise<SyncState> {
     try {
       const cursor = await this.db.query(`
@@ -93,6 +99,21 @@ export class SyncOrchestrator {
       console.error('[SyncOrchestrator] Error fetching last job status:', error);
     }
     return this.state;
+  }
+
+  // Removes every trace of a source by prefix. Data collections first, SyncLogs last, so a
+  // partial failure leaves the source still listed and the call safe to retry (idempotent).
+  // ponytail: 6 sequential removes, not a DB transaction; wrap in db.beginTransaction if a
+  // half-deleted source ever shows up in practice.
+  public async purgeSource(prefix: string): Promise<void> {
+    const targetCollections = ['Dataset', 'Author', 'Keywords', 'HasAuthor', 'HasKeyword'];
+    for (const col of targetCollections) {
+      await this.db.query(
+        `FOR doc IN @@col FILTER doc.source_prefix == @prefix REMOVE doc IN @@col`,
+        { '@col': col, prefix }
+      );
+    }
+    await this.db.query(`FOR log IN SyncLogs FILTER log.prefix == @prefix REMOVE log IN SyncLogs`, { prefix });
   }
 
   public async checkDatasetExists(prefix: string): Promise<boolean> {
@@ -170,14 +191,7 @@ export class SyncOrchestrator {
 
     if (overwrite) {
       console.log(`\x1b[33m[SyncOrchestrator] Overwrite is TRUE. Purging existing records for prefix '${prefix}'...\x1b[0m`);
-      const targetCollections = ['Dataset', 'Author', 'Keywords', 'HasAuthor', 'HasKeyword'];
-      for (const col of targetCollections) {
-        await this.db.query(
-          `FOR doc IN @@col FILTER doc.source_prefix == @prefix REMOVE doc IN @@col`,
-          { '@col': col, prefix }
-        );
-      }
-      await this.db.query(`FOR log IN SyncLogs FILTER log.prefix == @prefix REMOVE log IN SyncLogs`, { prefix });
+      await this.purgeSource(prefix);
     }
 
     const syncLogsCol = this.db.collection('SyncLogs');

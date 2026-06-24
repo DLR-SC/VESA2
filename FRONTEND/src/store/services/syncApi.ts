@@ -54,6 +54,13 @@ export const syncApi = createApi({
       query: () => "sync/history",
       providesTags: ['Sync'],
     }),
+    deleteSource: builder.mutation<void, string>({
+      query: (prefix) => ({
+        url: `sync/source/${encodeURIComponent(prefix)}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ['Sync'],
+    }),
   }),
 });
 
@@ -64,4 +71,5 @@ export const {
   useStopSyncMutation,
   useResumeSyncMutation,
   useGetSyncHistoryQuery,
+  useDeleteSourceMutation,
 } = syncApi;

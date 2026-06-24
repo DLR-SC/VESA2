@@ -105,6 +105,25 @@ export const getIngestionRouter = () => {
     }
   });
 
+  // 6b. DELETE /sync/source/:prefix — permanently removes a source's data. Idempotent.
+  router.delete('/source/:prefix', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { prefix } = req.params;
+      const status = orchestrator.getStatus();
+      if (status.status === 'running' && status.current_prefix === prefix) {
+        res.status(409).json({ error: `Cannot delete '${prefix}' while it is importing. Stop the import first.` });
+        return;
+      }
+      await orchestrator.purgeSource(prefix);
+      // Drop stale in-memory state so /sync/status won't report this deleted job once SyncLogs is empty.
+      if (orchestrator.getStatus().current_prefix === prefix) orchestrator.resetState();
+      res.status(204).end();
+    } catch (error: any) {
+      console.error("[Ingestion API] Delete source error:", error);
+      res.status(500).json({ error: "Failed to delete the data source." });
+    }
+  });
+
   // 6. GET /sync/history
   router.get('/history', async (_req: Request, res: Response): Promise<void> => {
     try {
