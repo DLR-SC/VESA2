@@ -1,15 +1,26 @@
 import React, { useState } from 'react';
-import { Box, TextField, Typography, Alert, Button, CircularProgress, Stack, useTheme, AlertTitle, Checkbox, FormControlLabel, Tooltip, Chip, Divider, InputAdornment } from '@mui/material';
+import { Box, TextField, Typography, Alert, Button, CircularProgress, Stack, useTheme, AlertTitle, Checkbox, FormControlLabel, Tooltip, Chip, Divider } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
-import LockIcon from '@mui/icons-material/Lock';
 import { useValidateUrlMutation } from '../../store/services/syncApi';
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string) || '';
 
+// Known OAI-PMH repositories — prefill the real base URL into the universal proxy.
+// The proxy negotiates the schema, so no metadataPrefix is pinned here.
 const PRESETS = [
-  { id: 'pangaea', label: 'PANGAEA', path: '/pangaea/records', prefix: 'pangaea', limit: 500, batchDelay: 1 },
-  { id: 'gbif',    label: 'GBIF',    path: '/gbif/records',    prefix: 'gbif',    limit: 500, batchDelay: 5 },
+  { id: 'pangaea',   label: 'PANGAEA',   oaiUrl: 'https://ws.pangaea.de/oai/provider', set: 'citable', dataset: 'pangaea', batchDelay: 1 },
+  { id: 'gbif',      label: 'GBIF',      oaiUrl: 'https://api.gbif.org/v1/oai-pmh/registry', set: '', dataset: 'gbif', batchDelay: 5 },
+  { id: 'zenodo',    label: 'Zenodo',    oaiUrl: 'https://zenodo.org/oai2d', set: '', dataset: 'zenodo', batchDelay: 1 },
+  { id: 'arxiv',     label: 'arXiv',     oaiUrl: 'https://oaipmh.arxiv.org/oai', set: '', dataset: 'arxiv', batchDelay: 5 },
+  { id: 'figshare',  label: 'Figshare',  oaiUrl: 'https://api.figshare.com/v2/oai', set: '', dataset: 'figshare', batchDelay: 2 },
+  { id: 'dataverse', label: 'Dataverse', oaiUrl: 'https://dataverse.harvard.edu/oai', set: '', dataset: 'dataverse', batchDelay: 2 },
 ] as const;
+
+// Wrap a pasted OAI-PMH base URL into the universal proxy endpoint.
+const toOaiEndpoint = (raw: string, set: string) => {
+  const base = `${BASE_URL}/oai/records?source=${encodeURIComponent(raw.trim())}`;
+  return set ? `${base}&set=${encodeURIComponent(set)}` : base;
+};
 
 // amCharts 5 default series color palette
 const PALETTE = [
@@ -33,8 +44,9 @@ interface HandshakeFormProps {
 const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy }) => {
   const theme = useTheme();
   const [url, setUrl] = useState('');
+  const [setName, setSetName] = useState('');
   const [prefix, setPrefix] = useState('');
-  const [limit, setLimit] = useState(1000);
+  const [limit, setLimit] = useState(100);
   const [color, setColor] = useState(PALETTE[0]);
   const [batchDelay, setBatchDelay] = useState(1);
   const [overwrite, setOverwrite] = useState(false);
@@ -42,19 +54,12 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
   const [validateUrl, { isLoading, error }] = useValidateUrlMutation();
 
   const handlePreset = (preset: typeof PRESETS[number]) => {
-    if (activePreset === preset.id) {
-      setActivePreset(null);
-      setUrl('');
-      setPrefix('');
-      setLimit(1000);
-      setBatchDelay(1);
-    } else {
-      setActivePreset(preset.id);
-      setUrl(`${BASE_URL}${preset.path}`);
-      setPrefix(preset.prefix);
-      setLimit(preset.limit);
-      setBatchDelay(preset.batchDelay);
-    }
+    setActivePreset(preset.id);
+    setUrl(preset.oaiUrl);
+    setSetName(preset.set);
+    setPrefix(preset.dataset);
+    setLimit(100);
+    setBatchDelay(preset.batchDelay);
   };
 
   const err = error as any;
@@ -62,9 +67,10 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
   const errData = err?.data;
 
   const handleValidate = async () => {
+    const endpoint = toOaiEndpoint(url, setName);
     try {
-      const response = await validateUrl({ target_url: url, dataset_id: prefix, overwrite }).unwrap();
-      if (response.valid) onValidated({ url, prefix, limit, color, batchDelay: batchDelay * 1000, overwrite });
+      const response = await validateUrl({ target_url: endpoint, dataset_id: prefix, overwrite }).unwrap();
+      if (response.valid) onValidated({ url: endpoint, prefix, limit, color, batchDelay: batchDelay * 1000, overwrite });
     } catch {
       // Error state is automatically captured by RTK Query's 'error' object
     }
@@ -79,13 +85,14 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
         </Alert>
       ) : (
         <Typography variant="body2" color="text.secondary">
-          Verify the research repository compatibility to begin the synchronization process.
+          Paste any OAI-PMH endpoint URL, or pick a known repository below. VESA negotiates the
+          metadata schema and translates the records into the ingestion contract automatically.
         </Typography>
       )}
 
       <Box>
         <Typography variant="caption" color="text.disabled" display="block" sx={{ mb: 1 }}>
-          Sample Data Adapters
+          Known Repositories
         </Typography>
         <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
           {PRESETS.map((preset) => (
@@ -101,7 +108,8 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
           ))}
         </Stack>
         <Typography variant="caption" color="text.disabled">
-          External APIs like PANGAEA and GBIF return data in their own formats. VESA data adapter translate those responses into the acceptable schema that ingestion pipeline expects.
+          Prefills the repository's OAI-PMH base URL. The richest available schema is selected
+          automatically; unknown schemas fall back to Dublin Core.
         </Typography>
       </Box>
 
@@ -109,28 +117,13 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
 
       <TextField
         fullWidth
-        label="API Endpoint URL"
+        label="OAI-PMH Endpoint URL"
         variant="outlined"
-        value={activePreset ? PRESETS.find(p => p.id === activePreset)!.path : url}
-        onChange={(e) => { setActivePreset(null); setUrl(e.target.value); }}
-        disabled={isLoading || isSystemBusy || !!activePreset}
-        InputProps={activePreset ? {
-          startAdornment: (
-            <InputAdornment position="start">
-              <Chip
-                label={PRESETS.find(p => p.id === activePreset)!.label}
-                size="small"
-                color="primary"
-                sx={{ fontWeight: 600, letterSpacing: 0.3 }}
-              />
-            </InputAdornment>
-          ),
-          endAdornment: (
-            <Tooltip title="URL is managed by the built-in proxy. Deselect the preset to enter a custom endpoint.">
-              <LockIcon fontSize="small" sx={{ color: 'text.disabled' }} />
-            </Tooltip>
-          ),
-        } : undefined}
+        placeholder="e.g. https://zenodo.org/oai2d"
+        value={url}
+        onChange={(e) => { setActivePreset(null); setSetName(''); setUrl(e.target.value); }}
+        disabled={isLoading || isSystemBusy}
+        helperText="The repository's OAI-PMH base URL."
       />
 
       <Box sx={{ display: 'flex', gap: theme.spacing(2) }}>
@@ -140,7 +133,7 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
           variant="outlined"
           value={prefix}
           onChange={(e) => setPrefix(e.target.value)}
-          placeholder="e.g. pangaea:"
+          placeholder="e.g. zenodo:"
           disabled={isLoading || isSystemBusy}
         />
         <TextField
