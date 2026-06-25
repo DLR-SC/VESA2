@@ -103,7 +103,7 @@ export class SyncOrchestrator {
 
   // Removes every trace of a source by prefix. Data collections first, SyncLogs last, so a
   // partial failure leaves the source still listed and the call safe to retry (idempotent).
-  // ponytail: 6 sequential removes, not a DB transaction; wrap in db.beginTransaction if a
+  // 6 sequential removes, not a DB transaction; wrap in db.beginTransaction if a
   // half-deleted source ever shows up in practice.
   public async purgeSource(prefix: string): Promise<void> {
     const targetCollections = ['Dataset', 'Author', 'Keywords', 'HasAuthor', 'HasKeyword'];
@@ -258,7 +258,6 @@ export class SyncOrchestrator {
     let paginationToken: string | null = resumeFrom?.token ?? null;
     let hasMoreData = true;
     let batchNumber = 0;
-    const expectedBatches = Math.ceil(limit / batchSize);
     const startTime = Date.now();
 
     try {
@@ -267,7 +266,7 @@ export class SyncOrchestrator {
         const params: Record<string, any> = { limit: batchSize };
         if (paginationToken) params.token = paginationToken;
 
-        console.log(`\x1b[36m[SyncOrchestrator] Fetching batch ${batchNumber}/${expectedBatches}...\x1b[0m`);
+        console.log(`\x1b[36m[SyncOrchestrator] Fetching batch ${batchNumber}...\x1b[0m`);
         const response = await this.fetchBatch(url, params);
 
         let records: IDataAdapter[];
@@ -308,7 +307,7 @@ export class SyncOrchestrator {
           const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
           const rps = (this.state.processed / ((Date.now() - startTime) / 1000)).toFixed(1);
           const pct = Math.min(100, Math.floor((this.state.processed / limit) * 100));
-          console.log(`\x1b[35m[SyncOrchestrator] [Batch ${batchNumber}/${expectedBatches}] ${this.state.processed}/${limit} records (${pct}%) | ${rps} rec/s | Elapsed: ${elapsedSec}s\x1b[0m`);
+          console.log(`\x1b[35m[SyncOrchestrator] [Batch ${batchNumber}] ${this.state.processed}/${limit} records (${pct}%) | ${rps} rec/s | Elapsed: ${elapsedSec}s\x1b[0m`);
         }
 
         if (nextToken && !this.abortSignal && this.state.processed < limit) {
@@ -334,7 +333,7 @@ export class SyncOrchestrator {
       // Same ordering discipline: DB first, then in-memory.
       await syncLogsCol.update(jobId, { status: 'failed', error_message: err.message, end_time: new Date().toISOString() });
       this.state.status = 'failed';
-      console.error(`\x1b[31m[SyncOrchestrator] ✘ Sync failed on batch ${batchNumber}/${expectedBatches} at record ${this.state.processed}/${limit}: ${err.message}\x1b[0m`);
+      console.error(`\x1b[31m[SyncOrchestrator] ✘ Sync failed on batch ${batchNumber} at record ${this.state.processed}/${limit}: ${err.message}\x1b[0m`);
     }
   }
 }
