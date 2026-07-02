@@ -129,7 +129,7 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
       <Box sx={{ display: 'flex', gap: theme.spacing(2) }}>
         <TextField
           sx={{ flex: 1 }}
-          label="Dataset Label"
+          label="Repository Label"
           variant="outlined"
           value={prefix}
           onChange={(e) => setPrefix(e.target.value)}
@@ -194,9 +194,9 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
 
       {isConflict && (
         <Alert severity="warning" variant="outlined" sx={{ borderRadius: 1 }}>
-          <AlertTitle>Dataset Already Exists</AlertTitle>
+          <AlertTitle>Repository Label Already Exists</AlertTitle>
           <Typography variant="body2">
-            This dataset label is currently in use. If you continue, the existing data will be permanently overwritten.
+            This Repository label is currently in use. If you continue, the existing data will be permanently overwritten.
           </Typography>
           <FormControlLabel
             control={<Checkbox checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />}
