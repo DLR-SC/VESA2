@@ -1,12 +1,8 @@
 import React, { useState } from 'react';
-import { Box, TextField, Typography, Alert, Button, CircularProgress, Stack, useTheme, AlertTitle, Checkbox, FormControlLabel, Tooltip, Chip, Divider } from '@mui/material';
+import { Box, TextField, Typography, Alert, Button, Stack, useTheme, AlertTitle, Tooltip, Chip, Divider } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
-import { useValidateUrlMutation } from '../../store/services/syncApi';
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string) || '';
-
-// Known OAI-PMH repositories — prefill the real base URL into the universal proxy.
-// The proxy negotiates the schema, so no metadataPrefix is pinned here.
+// Known OAI-PMH repositories — prefill the real base URL; the proxy negotiates the schema.
 const PRESETS = [
   { id: 'pangaea',   label: 'PANGAEA',   oaiUrl: 'https://ws.pangaea.de/oai/provider', set: 'citable', dataset: 'pangaea', batchDelay: 1 },
   { id: 'gbif',      label: 'GBIF',      oaiUrl: 'https://api.gbif.org/v1/oai-pmh/registry', set: '', dataset: 'gbif', batchDelay: 5 },
@@ -15,12 +11,6 @@ const PRESETS = [
   { id: 'figshare',  label: 'Figshare',  oaiUrl: 'https://api.figshare.com/v2/oai', set: '', dataset: 'figshare', batchDelay: 2 },
   { id: 'dataverse', label: 'Dataverse', oaiUrl: 'https://dataverse.harvard.edu/oai', set: '', dataset: 'dataverse', batchDelay: 2 },
 ] as const;
-
-// Wrap a pasted OAI-PMH base URL into the universal proxy endpoint.
-const toOaiEndpoint = (raw: string, set: string) => {
-  const base = `${BASE_URL}/oai/records?source=${encodeURIComponent(raw.trim())}`;
-  return set ? `${base}&set=${encodeURIComponent(set)}` : base;
-};
 
 // amCharts 5 default series color palette
 const PALETTE = [
@@ -36,12 +26,21 @@ const PALETTE = [
   '#42c176',
 ];
 
+export interface InspectConfig {
+  source: string;        // raw OAI base URL
+  set?: string;
+  datasetLabel: string;  // graph namespace label
+  limit: number;
+  color: string;
+  batchDelay: number;    // milliseconds
+}
+
 interface HandshakeFormProps {
-  onValidated: (config: { url: string; prefix: string; limit: number; color: string; batchDelay: number; overwrite?: boolean }) => void;
+  onInspect: (config: InspectConfig) => void;
   isSystemBusy?: boolean;
 }
 
-const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy }) => {
+const HandshakeForm: React.FC<HandshakeFormProps> = ({ onInspect, isSystemBusy }) => {
   const theme = useTheme();
   const [url, setUrl] = useState('');
   const [setName, setSetName] = useState('');
@@ -49,9 +48,7 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
   const [limit, setLimit] = useState(100);
   const [color, setColor] = useState(PALETTE[0]);
   const [batchDelay, setBatchDelay] = useState(1);
-  const [overwrite, setOverwrite] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
-  const [validateUrl, { isLoading, error }] = useValidateUrlMutation();
 
   const handlePreset = (preset: typeof PRESETS[number]) => {
     setActivePreset(preset.id);
@@ -62,18 +59,15 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
     setBatchDelay(preset.batchDelay);
   };
 
-  const err = error as any;
-  const isConflict = err?.status === 409;
-  const errData = err?.data;
-
-  const handleValidate = async () => {
-    const endpoint = toOaiEndpoint(url, setName);
-    try {
-      const response = await validateUrl({ target_url: endpoint, dataset_id: prefix, overwrite }).unwrap();
-      if (response.valid) onValidated({ url: endpoint, prefix, limit, color, batchDelay: batchDelay * 1000, overwrite });
-    } catch {
-      // Error state is automatically captured by RTK Query's 'error' object
-    }
+  const handleInspect = () => {
+    onInspect({
+      source: url.trim(),
+      set: setName || undefined,
+      datasetLabel: prefix,
+      limit,
+      color,
+      batchDelay: batchDelay * 1000,
+    });
   };
 
   return (
@@ -85,8 +79,8 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
         </Alert>
       ) : (
         <Typography variant="body2" color="text.secondary">
-          Paste any OAI-PMH endpoint URL, or pick a known repository below. VESA negotiates the
-          metadata schema and translates the records into the ingestion contract automatically.
+          Paste any OAI-PMH endpoint URL, or pick a known repository below. The next step inspects the
+          source — schema, a sample of records, and what VESA can extract — before anything is imported.
         </Typography>
       )}
 
@@ -94,16 +88,16 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
         <Typography variant="caption" color="text.disabled" display="block" sx={{ mb: 1 }}>
           Known Repositories
         </Typography>
-        <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 1, flexWrap: 'wrap' }}>
           {PRESETS.map((preset) => (
             <Chip
               key={preset.id}
               label={preset.label}
-              onClick={() => !isLoading && !isSystemBusy && handlePreset(preset)}
+              onClick={() => !isSystemBusy && handlePreset(preset)}
               variant={activePreset === preset.id ? 'filled' : 'outlined'}
               color={activePreset === preset.id ? 'primary' : 'default'}
               size="small"
-              disabled={isLoading || isSystemBusy}
+              disabled={isSystemBusy}
             />
           ))}
         </Stack>
@@ -122,7 +116,7 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
         placeholder="e.g. https://zenodo.org/oai2d"
         value={url}
         onChange={(e) => { setActivePreset(null); setSetName(''); setUrl(e.target.value); }}
-        disabled={isLoading || isSystemBusy}
+        disabled={isSystemBusy}
         helperText="The repository's OAI-PMH base URL."
       />
 
@@ -134,7 +128,7 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
           value={prefix}
           onChange={(e) => setPrefix(e.target.value)}
           placeholder="e.g. zenodo:"
-          disabled={isLoading || isSystemBusy}
+          disabled={isSystemBusy}
         />
         <TextField
           type="number"
@@ -143,7 +137,7 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
           value={limit}
           onChange={(e) => setLimit(Number(e.target.value))}
           sx={{ width: 120 }}
-          disabled={isLoading || isSystemBusy}
+          disabled={isSystemBusy}
         />
         <Tooltip title="Seconds to wait between page requests." placement="top">
           <TextField
@@ -154,7 +148,7 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
             onChange={(e) => setBatchDelay(Math.max(0, Number(e.target.value)))}
             inputProps={{ min: 0 }}
             sx={{ width: 140 }}
-            disabled={isLoading || isSystemBusy}
+            disabled={isSystemBusy}
           />
         </Tooltip>
       </Box>
@@ -192,46 +186,14 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onValidated, isSystemBusy
         </Stack>
       </Box>
 
-      {isConflict && (
-        <Alert severity="warning" variant="outlined" sx={{ borderRadius: 1 }}>
-          <AlertTitle>Repository Label Already Exists</AlertTitle>
-          <Typography variant="body2">
-            This Repository label is currently in use. If you continue, the existing data will be permanently overwritten.
-          </Typography>
-          <FormControlLabel
-            control={<Checkbox checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />}
-            label="Confirm overwrite"
-            sx={{ mt: 1 }}
-          />
-        </Alert>
-      )}
-
-      {error && !isConflict && (
-        <Alert
-          severity="error"
-          variant="outlined"
-          sx={{ borderRadius: 1, backgroundColor: 'rgba(211, 47, 47, 0.04)' }}
-        >
-          <AlertTitle>
-            Connection Failed {errData?.originalStatus ? `(Error ${errData.originalStatus})` : (err?.status ? `(Status ${err.status})` : '')}
-          </AlertTitle>
-          <Typography variant="body2">{errData?.message || errData?.error || 'An unexpected error occurred while verifying the connection.'}</Typography>
-          {errData?.reason && (
-            <Typography variant="caption" sx={{ display: 'block', mt: 0.5, fontStyle: 'italic', opacity: 0.8 }}>
-              Reason: {errData.reason}
-            </Typography>
-          )}
-        </Alert>
-      )}
-
       <Button
         variant="contained"
-        onClick={handleValidate}
-        disabled={isLoading || isSystemBusy || !url || !prefix || (isConflict && !overwrite)}
+        onClick={handleInspect}
+        disabled={isSystemBusy || !url || !prefix}
         size="large"
         sx={{ py: 1.5, mt: 1, alignSelf: 'flex-start', minWidth: 180, textTransform: 'none' }}
       >
-        {isLoading ? <CircularProgress size={24} color="inherit" /> : 'Verify Connection'}
+        Inspect Source
       </Button>
     </Stack>
   );

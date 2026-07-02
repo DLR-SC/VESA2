@@ -9,6 +9,7 @@ import {
   ISyncResumeRequest,
   ISyncResumeResponse,
   ISyncHistoryResponse,
+  IInspectResult,
 } from "types/appData";
 
 export const syncApi = createApi({
@@ -61,6 +62,18 @@ export const syncApi = createApi({
       }),
       invalidatesTags: ['Sync'],
     }),
+    getBackoff: builder.query<{ backoff: { attempt: number; total: number; status: number | null; retryAt: number } | null }, void>({
+      query: () => "oai/backoff",
+    }),
+    inspectSource: builder.query<IInspectResult, { source: string; set?: string; prefix?: string; sample?: number }>({
+      query: ({ source, set, prefix, sample = 12 }) => {
+        const p = new URLSearchParams({ source });
+        if (set) p.set("set", set);
+        if (prefix) p.set("prefix", prefix);
+        p.set("sample", String(sample));
+        return `oai/inspect?${p.toString()}`;
+      },
+    }),
   }),
 });
 
@@ -72,4 +85,6 @@ export const {
   useResumeSyncMutation,
   useGetSyncHistoryQuery,
   useDeleteSourceMutation,
+  useInspectSourceQuery,
+  useGetBackoffQuery,
 } = syncApi;

@@ -189,3 +189,34 @@ export interface ISyncHistoryEntry {
 export interface ISyncHistoryResponse {
   result: ISyncHistoryEntry[];
 }
+
+// Staging inspection — a read-only sample of a source before ingest.
+export interface IExtractedRecord {
+  dataset: {
+    id: string;
+    title: string;
+    abstract: string | null;
+    uri: string;
+    publicationDate: string | null;
+    spatial: { west: number | null; east: number | null; south: number | null; north: number | null } | null;
+    temporal: { start: string | null; end: string | null } | null;
+    source?: string;
+  };
+  authors: Array<{ id: string; firstName: string; lastName: string }>;
+  keywords: Array<{ id: string; name: string }>;
+}
+
+export interface IInspectResult {
+  source: string;
+  selectedPrefix: string;
+  discovered: Array<{ prefix: string; rank: 0 | 1 | 3; selected: boolean }>;
+  sample: Array<{ raw: any; extracted: IExtractedRecord | null }>;
+  fidelity: {
+    sampled: number;
+    mapPct: number;
+    timePct: number;
+    abstractPct: number;
+    authorsAvg: number;
+    keywordsAvg: number;
+  };
+}
