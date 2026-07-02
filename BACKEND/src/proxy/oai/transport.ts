@@ -24,12 +24,26 @@ export interface OaiPage {
   nextToken: string | null;
 }
 
+// Current backoff, exposed so the UI can show "retrying…" instead of looking hung during the
+// 8s/20s sleeps. ponytail: single global — fetches in a request run sequentially so it's
+// accurate there; under truly concurrent harvests it only reflects the latest. retryAt is an
+// epoch ms so the client can count down.
+export interface BackoffStatus {
+  attempt: number;
+  total: number;
+  status: number | null; // upstream HTTP status that triggered it (null = network error)
+  retryAt: number;
+}
+let backoff: BackoffStatus | null = null;
+export const getBackoff = (): BackoffStatus | null => backoff;
+
 async function fetchWithBackoff(url: string): Promise<string> {
   let lastError: any;
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     try {
       oaiDebug("fetch", `GET ${url}`);
       const { data } = await axios.get<string>(url, { headers: HEADERS, timeout: TIMEOUT_MS });
+      backoff = null; // a success clears any pending retry indicator
       return data;
     } catch (err: any) {
       lastError = err;
@@ -38,10 +52,12 @@ async function fetchWithBackoff(url: string): Promise<string> {
       const isTransient = !status || status === 429 || status >= 500;
       if (!isTransient || attempt === RETRY_DELAYS_MS.length) break;
       const waitMs = RETRY_DELAYS_MS[attempt];
+      backoff = { attempt: attempt + 1, total: RETRY_DELAYS_MS.length, status: status ?? null, retryAt: Date.now() + waitMs };
       oaiDebug("fetch", `${status ?? "network error"} → retry in ${waitMs / 1000}s (${attempt + 1}/${RETRY_DELAYS_MS.length})`);
       await new Promise((r) => setTimeout(r, waitMs));
     }
   }
+  backoff = null; // gave up — stop showing the indicator
   throw lastError;
 }
 

@@ -4,15 +4,17 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import ReplayIcon from '@mui/icons-material/Replay';
 import { useNavigate } from 'react-router-dom';
 import HandshakeForm from './HandshakeForm';
+import StagingView, { StagingConfig } from './StagingView';
 import SyncControl from './SyncControl';
 import ConnectedSources from './ConnectedSources';
 import { useGetSyncStatusQuery, useGetSyncHistoryQuery } from '../../store/services/syncApi';
 
-const steps = ['Connect', 'Import', 'Analyze'];
+const steps = ['Connect', 'Inspect', 'Import', 'Analyze'];
 
 const IngestionPage: React.FC = () => {
 	const theme = useTheme();
 	const navigate = useNavigate();
+	const [stagingConfig, setStagingConfig] = useState<StagingConfig | null>(null);
 	const [config, setConfig] = useState<{ url: string; prefix: string; limit: number; color: string; batchDelay: number; overwrite?: boolean } | null>(null);
 	const [activeStep, setActiveStep] = useState(0);
 	const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -27,6 +29,7 @@ const IngestionPage: React.FC = () => {
 			setIgnoredJobId(currentJobId);
 			localStorage.setItem('ignoredJobId', currentJobId);
 		}
+		setStagingConfig(null);
 		setConfig(null);
 		setActiveStep(0);
 		setErrorMsg(null);
@@ -40,22 +43,22 @@ const IngestionPage: React.FC = () => {
 		const isStopped = status === 'idle' && processed > 0 && processed < total;
 
 		if (status === 'running') {
-			if (activeStep !== 1) {
-				setConfig((prev) => ({ url, prefix: current_prefix, limit: total, color: prev?.color ?? '#543CF0', batchDelay: prev?.batchDelay ?? 1000 }));
-				setActiveStep(1);
-			}
-			setErrorMsg(null);
-		} else if (isCompleted && job_id !== ignoredJobId) {
 			if (activeStep !== 2) {
 				setConfig((prev) => ({ url, prefix: current_prefix, limit: total, color: prev?.color ?? '#543CF0', batchDelay: prev?.batchDelay ?? 1000 }));
 				setActiveStep(2);
+			}
+			setErrorMsg(null);
+		} else if (isCompleted && job_id !== ignoredJobId) {
+			if (activeStep !== 3) {
+				setConfig((prev) => ({ url, prefix: current_prefix, limit: total, color: prev?.color ?? '#543CF0', batchDelay: prev?.batchDelay ?? 1000 }));
+				setActiveStep(3);
 				refetchHistory();
 			}
 			setErrorMsg(null);
 		} else if (isStopped && job_id !== ignoredJobId) {
-			if (activeStep !== 1) {
+			if (activeStep !== 2) {
 				setConfig((prev) => ({ url, prefix: current_prefix, limit: total, color: prev?.color ?? '#543CF0', batchDelay: prev?.batchDelay ?? 1000 }));
-				setActiveStep(1);
+				setActiveStep(2);
 			}
 			setErrorMsg(`Synchronization stopped. Processed ${processed} of ${total} records. Please start a New Import.`);
 		} else if (status === 'failed') {
@@ -107,25 +110,32 @@ const IngestionPage: React.FC = () => {
 
 					<Box sx={{ minHeight: 300, display: 'flex', flexDirection: 'column' }}>
 						{activeStep === 0 && (
-							<HandshakeForm 
-								onValidated={(c) => { setConfig(c); setActiveStep(1); }} 
+							<HandshakeForm
+								onInspect={(sc) => { setStagingConfig(sc); setActiveStep(1); }}
 								isSystemBusy={syncStatus?.status === 'running'}
 							/>
 						)}
-						{activeStep === 1 && (
+						{activeStep === 1 && stagingConfig && (
+							<StagingView
+								config={stagingConfig}
+								onIngest={(c) => { setConfig(c); setActiveStep(2); }}
+								onBack={() => setActiveStep(0)}
+							/>
+						)}
+						{activeStep === 2 && (
 							<Box sx={{ width: '100%' }}>
 								<SyncControl status={syncStatus || {}} config={config || { url: '', prefix: '', limit: 0, color: '#543CF0', batchDelay: 0 }} />
-								<Button 
-									sx={{ mt: 3, alignSelf: 'flex-start', textTransform: 'none' }} 
+								<Button
+									sx={{ mt: 3, alignSelf: 'flex-start', textTransform: 'none' }}
 									color="error"
-									variant="text" 
+									variant="text"
 									onClick={handleReset}
 								>
 									Reset
 								</Button>
 							</Box>
 						)}
-						{activeStep === 2 && (() => {
+						{activeStep === 3 && (() => {
 							const completedEntry = historyData?.result?.find(e => e.prefix === config?.prefix);
 							return (
 								<Stack spacing={3} sx={{ mt: 2 }}>
