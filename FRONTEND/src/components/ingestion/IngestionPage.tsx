@@ -112,6 +112,7 @@ const IngestionPage: React.FC = () => {
 						{activeStep === 0 && (
 							<HandshakeForm
 								onInspect={(sc) => { setStagingConfig(sc); setActiveStep(1); }}
+								onIngestDirect={(c) => { setConfig(c); setActiveStep(2); }}
 								isSystemBusy={syncStatus?.status === 'running'}
 							/>
 						)}

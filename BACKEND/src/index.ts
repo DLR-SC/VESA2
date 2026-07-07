@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 
 import { bootstrapGateway } from "./gateway";
 import { pangaeaProxyRouter } from "./proxy/pangaeaProxy";
+import { gbifProxyRouter } from "./proxy/gbifProxy";
+import { zenodoProxyRouter } from "./proxy/zenodoProxy";
 import { getIngestionRouter } from "./ingestion/ingestionRouter";
 import { ArangoInitService } from "./gateway/services/ArangoInitService";
 
@@ -59,6 +61,11 @@ const ROUTES = [
   ["/health", healthCheckRouter],
   ["/initemptydb", initemptydbRouter],
   ["/pangaea-harvester", pangaeaHarvesterRouter],
+  // Curated per-source proxies — exact hand-written mappings, the alternative to the
+  // universal heuristic /oai proxy. SyncOrchestrator harvests either the same way.
+  ["/proxy/pangaea", pangaeaProxyRouter],
+  ["/proxy/gbif", gbifProxyRouter],
+  ["/proxy/zenodo", zenodoProxyRouter],
   ["/oai", oaiProxyRouter],
   ["/sync", getIngestionRouter()],
 ] as const;
