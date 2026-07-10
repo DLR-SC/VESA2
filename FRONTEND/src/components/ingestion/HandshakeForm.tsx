@@ -1,24 +1,20 @@
 import React, { useState } from 'react';
 import { Box, TextField, Typography, Alert, Button, Stack, useTheme, AlertTitle, Tooltip, Chip, Divider, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
+import repoPresets from './repoPresets.json';
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string) || '';
 
 // Known OAI-PMH repositories — prefill the real base URL; the proxy negotiates the schema.
-// `proxyPath` (when present) is a curated hand-written proxy for that source, offering an
-// exact mapping as an alternative to the universal heuristic — see the Mapping toggle.
+// Add sources by editing repoPresets.json (no code change). `set` may be "" and `batchDelay`
+// is in seconds. `proxyPath` (optional) is a bundled hand-written proxy for that source, surfaced
+// as a ready-made example under the Custom Proxy mode.
+// (A base URL may itself carry a query string; transport joins params with `&` vs `?` accordingly.)
 interface RepoPreset {
   id: string; label: string; oaiUrl: string; set: string; dataset: string; batchDelay: number;
   proxyPath?: string;
 }
-const PRESETS: RepoPreset[] = [
-  { id: 'pangaea',   label: 'PANGAEA',   oaiUrl: 'https://ws.pangaea.de/oai/provider', set: 'citable', dataset: 'pangaea', batchDelay: 1, proxyPath: '/proxy/pangaea' },
-  { id: 'gbif',      label: 'GBIF',      oaiUrl: 'https://api.gbif.org/v1/oai-pmh/registry', set: '', dataset: 'gbif', batchDelay: 5, proxyPath: '/proxy/gbif' },
-  { id: 'zenodo',    label: 'Zenodo',    oaiUrl: 'https://zenodo.org/oai2d', set: '', dataset: 'zenodo', batchDelay: 1, proxyPath: '/proxy/zenodo' },
-  { id: 'arxiv',     label: 'arXiv',     oaiUrl: 'https://oaipmh.arxiv.org/oai', set: '', dataset: 'arxiv', batchDelay: 5 },
-  { id: 'figshare',  label: 'Figshare',  oaiUrl: 'https://api.figshare.com/v2/oai', set: '', dataset: 'figshare', batchDelay: 2 },
-  { id: 'dataverse', label: 'Dataverse', oaiUrl: 'https://dataverse.harvard.edu/oai', set: '', dataset: 'dataverse', batchDelay: 2 },
-];
+const PRESETS: RepoPreset[] = repoPresets;
 
 // amCharts 5 default series color palette
 const PALETTE = [
@@ -52,7 +48,7 @@ export interface InspectConfig {
 
 interface HandshakeFormProps {
   onInspect: (config: InspectConfig) => void;
-  // Curated path: known source with a hand-written proxy → skip inspection, import directly.
+  // Custom Proxy path: a proxy that already emits /records → skip inspection, import directly.
   onIngestDirect?: (config: { url: string; prefix: string; limit: number; color: string; batchDelay: number }) => void;
   isSystemBusy?: boolean;
 }
@@ -66,13 +62,9 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onInspect, onIngestDirect
   const [color, setColor] = useState(PALETTE[0]);
   const [batchDelay, setBatchDelay] = useState(1);
   const [activePreset, setActivePreset] = useState<string | null>(null);
-  const [curated, setCurated] = useState(false);
   // 'oai' = explore via ListMetadataFormats (inspect first); 'custom' = user's own proxy (import direct).
   const [mode, setMode] = useState<'oai' | 'custom'>('oai');
   const [proxyUrl, setProxyUrl] = useState('');
-
-  const active = PRESETS.find((p) => p.id === activePreset);
-  const useCurated = !!active?.proxyPath && curated;
 
   const handlePreset = (preset: RepoPreset) => {
     setActivePreset(preset.id);
@@ -81,7 +73,6 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onInspect, onIngestDirect
     setPrefix(preset.dataset);
     setLimit(100);
     setBatchDelay(preset.batchDelay);
-    setCurated(!!preset.proxyPath); // default a known source to its exact mapping
   };
 
   // Prefill Custom Proxy with a bundled hand-written proxy — a working example of the /records contract.
@@ -93,16 +84,6 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onInspect, onIngestDirect
   const handleSubmit = () => {
     if (mode === 'custom') {
       onIngestDirect?.({ url: buildRecordsUrl(proxyUrl), prefix, limit, color, batchDelay: batchDelay * 1000 });
-      return;
-    }
-    if (useCurated && active?.proxyPath) {
-      onIngestDirect?.({
-        url: `${BASE_URL}${active.proxyPath}/records`,
-        prefix,
-        limit,
-        color,
-        batchDelay: batchDelay * 1000,
-      });
       return;
     }
     onInspect({
@@ -178,7 +159,7 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onInspect, onIngestDirect
             variant="outlined"
             placeholder="e.g. https://zenodo.org/oai2d"
             value={url}
-            onChange={(e) => { setActivePreset(null); setSetName(''); setCurated(false); setUrl(e.target.value); }}
+            onChange={(e) => { setActivePreset(null); setSetName(''); setUrl(e.target.value); }}
             disabled={isSystemBusy}
             helperText="The repository's OAI-PMH base URL."
           />
@@ -246,37 +227,6 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onInspect, onIngestDirect
         </Tooltip>
       </Box>
 
-      {/* Curated proxies exist only for known sources — offer the exact mapping vs. the heuristic. */}
-      {mode === 'oai' && active?.proxyPath && (
-        <Box>
-          <Typography variant="caption" color="text.disabled" display="block" sx={{ mb: 1 }}>
-            Mapping
-          </Typography>
-          <Stack direction="row" spacing={1}>
-            <Chip
-              label="Curated (exact)"
-              size="small"
-              onClick={() => !isSystemBusy && setCurated(true)}
-              variant={curated ? 'filled' : 'outlined'}
-              color={curated ? 'primary' : 'default'}
-              disabled={isSystemBusy}
-            />
-            <Chip
-              label="Universal (heuristic)"
-              size="small"
-              onClick={() => !isSystemBusy && setCurated(false)}
-              variant={!curated ? 'filled' : 'outlined'}
-              color={!curated ? 'primary' : 'default'}
-              disabled={isSystemBusy}
-            />
-          </Stack>
-          <Typography variant="caption" color="text.disabled" display="block" sx={{ mt: 1 }}>
-            Curated uses this repository's hand-written mapping and imports directly. Universal
-            negotiates the schema and lets you inspect a sample first.
-          </Typography>
-        </Box>
-      )}
-
       {/* Source colour — drives the accent in ConnectedSources and chart series */}
       <Box>
         <Typography variant="caption" color="text.disabled" display="block" sx={{ mb: 1 }}>
@@ -317,7 +267,7 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onInspect, onIngestDirect
         size="large"
         sx={{ py: 1.5, mt: 1, alignSelf: 'flex-start', minWidth: 180, textTransform: 'none' }}
       >
-        {mode === 'custom' ? 'Import Records' : useCurated ? 'Import (curated)' : 'Inspect Source'}
+        {mode === 'custom' ? 'Import Records' : 'Inspect Source'}
       </Button>
     </Stack>
   );

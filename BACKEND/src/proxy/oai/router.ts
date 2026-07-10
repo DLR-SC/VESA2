@@ -24,9 +24,9 @@ export function rankFormats(formats: string[]): string[] {
   return [...new Set(formats)].sort((a, b) => formatRank(b) - formatRank(a));
 }
 
-// Probe in richness order, falling through only on cannotDisseminateFormat (repos
-// sometimes list a format they won't actually serve). fetchPage/getFormats are
-// injectable so the logic is testable without network.
+// Probe in richness order, falling through when a listed format is unusable — either
+// not served (cannotDisseminateFormat) or served empty (noRecordsMatch). fetchPage/
+// getFormats are injectable so the logic is testable without network.
 export async function negotiate(
   source: string,
   set: string | undefined,
@@ -53,8 +53,11 @@ export async function negotiate(
       return { prefix, page };
     } catch (e: any) {
       lastErr = e;
-      if (e?.oaiCode === "cannotDisseminateFormat") {
-        oaiDebug("negotiate", `${prefix} not served → next`);
+      // A schema the source lists but won't actually serve (cannotDisseminateFormat) or
+      // serves empty (noRecordsMatch — e.g. Ariadne advertises oai_ead but its ListRecords
+      // is empty) is unusable → try the next candidate, down to the oai_dc floor.
+      if (e?.oaiCode === "cannotDisseminateFormat" || e?.oaiCode === "noRecordsMatch") {
+        oaiDebug("negotiate", `${prefix} unusable (${e.oaiCode}) → next`);
         continue;
       }
       throw e; // network / other OAI error — bail
@@ -124,8 +127,8 @@ oaiProxyRouter.get("/inspect", async (req: Request, res: Response): Promise<void
       try {
         page = await fetchOaiPage(buildOaiUrl(source, explicit, set, undefined));
       } catch (e: any) {
-        if (e?.oaiCode === "cannotDisseminateFormat") {
-          res.status(409).json({ error: `Source does not serve '${explicit}'.`, unsupportedPrefix: explicit });
+        if (e?.oaiCode === "cannotDisseminateFormat" || e?.oaiCode === "noRecordsMatch") {
+          res.status(409).json({ error: `Source does not serve records for '${explicit}'.`, unsupportedPrefix: explicit });
           return;
         }
         throw e;
