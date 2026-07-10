@@ -11,6 +11,8 @@ interface IWordCloudProps {
 
 function WordCloud(props: IWordCloudProps): JSX.Element {
   const series = React.useRef<am5wc.WordCloud>();
+  const initDataRef = React.useRef(props.data);
+  React.useEffect(() => { initDataRef.current = props.data; }, [props.data]);
   const colorPalette = [
     "#11609c",
     "#0068a5",
@@ -39,49 +41,63 @@ function WordCloud(props: IWordCloudProps): JSX.Element {
     "#d0f500",
   ];
 
-  React.useLayoutEffect(() => {
-    const root = am5.Root.new("wordcloud-chart");
-    root.setThemes([am5themes_Animated.new(root)]);
+  // Deferred init — browser paints the shell before amCharts runs.
+  // initDataRef holds the latest data so the chart can populate immediately after init
+  // without waiting for a subsequent props.data change.
+  React.useEffect(() => {
+    let root: am5.Root | undefined;
+    const id = setTimeout(() => {
+      root = am5.Root.new("wordcloud-chart");
+      root.setThemes([am5themes_Animated.new(root)]);
 
-    /** Creating a new wordcloud series with text and value object. We can also pass the whole text string directly and amcharts would count the frequency of occurence */
+      const wcChart = am5wc.WordCloud.new(root, {
+        autoFit: false,
+        minValue: 1,
+        angles: [0],
+        colors: am5.ColorSet.new(root, {
+          colors: colorPalette.map((color) => am5.color(color)),
+        }),
+        categoryField: "keyword",
+        valueField: "count",
+      });
 
-    const wcChart = am5wc.WordCloud.new(root, {
-      autoFit: false,
-      // minFontSize: am5.percent(1),
-      // maxFontSize: am5.percent(7),
-      minValue: 1,
-      angles: [0],
-      colors: am5.ColorSet.new(root, {
-        colors: colorPalette.map((color) => am5.color(color)),
-      }),
-      categoryField: "keyword",
-      valueField: "count",
-    });
+      series.current = root.container.children.push(wcChart);
 
-    series.current = root.container.children.push(wcChart);
+      series.current.labels.template.states.create("hover", {
+        fill: am5.color(0x297373),
+        cursorOverStyle: "pointer",
+        scale: 1.15,
+      });
+      series.current.labels.template.states.create("disabled", {
+        fill: am5.color(0x060f0f),
+      });
 
-    series?.current?.labels.template.states.create("hover", {
-      fill: am5.color(0x297373),
-      cursorOverStyle: "pointer",
-      scale: 1.15,
-    });
-    series?.current?.labels.template.states.create("disabled", {
-      fill: am5.color(0x060f0f),
-    });
+      series.current.labels.template.events.on("pointerover", (event) => {
+        event.target.states.applyAnimate("hover");
+      });
 
-    series?.current?.labels.template.events.on("pointerover", (event) => {
-      let label = event.target;
-      label.states.applyAnimate("hover");
-    });
+      series.current.labels.template.events.on("click", (event) => {
+        props.selectedKeywordCallback(
+          event.target.dataItem?.dataContext as IKeywordData
+        );
+      });
 
-    series?.current?.labels.template.events.on("click", (event) => {
-      props.selectedKeywordCallback(
-        event.target.dataItem?.dataContext as IKeywordData
-      );
-    });
+      // Load data that arrived while init was deferred
+      series.current.setAll({ minFontSize: 9, maxFontSize: 36 });
+      series.current.data.setAll(initDataRef.current.slice(0, 500));
+      series.current.labels.template.setAll({
+        paddingTop: 5,
+        paddingBottom: 5,
+        paddingLeft: 5,
+        paddingRight: 5,
+        fontFamily: "Montserrat, sans-serif",
+        fontWeight: "500",
+      });
+    }, 0);
 
     return () => {
-      root.dispose();
+      clearTimeout(id);
+      root?.dispose();
     };
   }, []);
 

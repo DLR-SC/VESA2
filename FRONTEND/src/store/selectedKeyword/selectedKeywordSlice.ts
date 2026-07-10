@@ -14,7 +14,13 @@ const SelectedKeywordSlice = createSlice({
   name: "SelectedKeyword",
   initialState,
   reducers: {
+    // Dispatching this triggers the keyword listener (full filter flow).
     update(state, action: PayloadAction<IKeywordData | null>) {
+      state.selectedKeyword = action.payload;
+    },
+    // Silent state update — does NOT trigger the keyword listener.
+    // Used by the undo listener to restore the previous keyword without re-filtering.
+    set(state, action: PayloadAction<IKeywordData | null>) {
       state.selectedKeyword = action.payload;
     },
     reset() {
@@ -23,7 +29,10 @@ const SelectedKeywordSlice = createSlice({
   },
 });
 
-export const { update: updateSelectedKeyword, reset: resetSelectedKeyword } =
-  SelectedKeywordSlice.actions;
+export const {
+  update: updateSelectedKeyword,
+  set: setSelectedKeyword,
+  reset: resetSelectedKeyword,
+} = SelectedKeywordSlice.actions;
 
 export default SelectedKeywordSlice.reducer;

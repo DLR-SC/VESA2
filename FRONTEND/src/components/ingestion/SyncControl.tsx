@@ -2,7 +2,8 @@ import React from 'react';
 import { Box, Button, Typography, LinearProgress, Alert, Stack, useTheme } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
-import { useStartSyncMutation, useStopSyncMutation } from '../../store/services/syncApi';
+import ReplayIcon from '@mui/icons-material/Replay';
+import { useStartSyncMutation, useStopSyncMutation, useResumeSyncMutation } from '../../store/services/syncApi';
 
 interface SyncControlProps {
 	config: { url: string; prefix: string; limit: number; color: string; batchDelay: number; overwrite?: boolean };
@@ -13,8 +14,10 @@ const SyncControl: React.FC<SyncControlProps> = ({ config, status }) => {
 	const theme = useTheme();
 	const [startSync, { isLoading: isStarting, error }] = useStartSyncMutation();
 	const [stopSync, { isLoading: isStopping }] = useStopSyncMutation();
+	const [resumeSync, { isLoading: isResuming, error: resumeError }] = useResumeSyncMutation();
 
 	const isRunning = status?.status === 'running';
+	const isFailed = status?.status === 'failed' && !!status?.job_id;
 	const totalRecords = status?.total || config.limit || 1;
 	const processedRecords = status?.processed || 0;
 	const progress = (processedRecords / totalRecords) * 100;
@@ -61,6 +64,44 @@ const SyncControl: React.FC<SyncControlProps> = ({ config, status }) => {
 						>
 							{isStopping ? 'Stopping...' : 'Stop Import'}
 						</Button>
+					</Stack>
+				) : isFailed ? (
+					<Stack spacing={1.5}>
+						<Alert severity="warning" variant="outlined" sx={{ borderRadius: 1 }}>
+							Import stopped at {processedRecords} of {totalRecords} records.
+							{status?.error_message && ` Error: ${status.error_message}`}
+						</Alert>
+						<Stack direction="row" spacing={1.5}>
+							<Button
+								variant="contained"
+								color="warning"
+								startIcon={<ReplayIcon />}
+								size="large"
+								onClick={() => resumeSync({ job_id: status.job_id! })}
+								disabled={isResuming}
+								sx={{ py: 1.5, minWidth: 180, textTransform: 'none' }}
+							>
+								{isResuming ? 'Resuming...' : 'Resume Import'}
+							</Button>
+							<Button
+								variant="outlined"
+								color="primary"
+								startIcon={<PlayArrowIcon />}
+								size="large"
+								onClick={() =>
+									startSync({ target_url: config.url, dataset_id: config.prefix, total_limit: config.limit, overwrite: true, inter_batch_sleep_ms: config.batchDelay, ui_config: { color: config.color } })
+								}
+								disabled={isStarting}
+								sx={{ py: 1.5, minWidth: 180, textTransform: 'none' }}
+							>
+								{isStarting ? 'Initializing...' : 'Start Over'}
+							</Button>
+						</Stack>
+						{resumeError && (
+							<Alert severity="error" variant="outlined" sx={{ borderRadius: 1 }}>
+								Could not resume import. Check terminal logs.
+							</Alert>
+						)}
 					</Stack>
 				) : (
 					<Button

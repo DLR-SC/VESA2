@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import RGL, { Layout, WidthProvider } from "react-grid-layout";
 import Chartspaper from "../components/ChartsPaper";
 import InfoCard from "../components/InfoCard";
@@ -57,9 +57,9 @@ const ChartsContainer = (): JSX.Element => {
   const gridLayout = useAppSelector((state) => state.ui.gridLayout);
   const dispatch = useAppDispatch();
 
-  const handleLayoutChange = (layout: Layout[]) => {
+  const handleLayoutChange = useCallback((layout: Layout[]) => {
     dispatch(updateGridLayout(layout));
-  };
+  }, [dispatch]);
 
   return (
     <ReactGridLayout

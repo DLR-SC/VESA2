@@ -1,5 +1,3 @@
-import crossfilter from "crossfilter2";
-
 export interface AppState {
   searchString: string | null;
   handleSearch: (value: string) => void;
@@ -9,14 +7,6 @@ export type Props = {
   children: React.ReactNode;
 };
 
-export interface ISampleData {
-  _key: string;
-  _id: string;
-  _rev: string;
-  keyword_full: string;
-  timestamp: string;
-}
-
 //this is the interface for the wordcloud data to be transformed into
 export interface IWordCloudData {
   text: string;
@@ -24,85 +14,9 @@ export interface IWordCloudData {
   year: number; //temp
 }
 
-//test data interface
-
 export interface ILocation {
   lat: string;
   lon: string;
-}
-
-interface DateInfo {
-  pub_date: string;
-}
-
-// This is the interface for the incoming test data for bar charts
-export interface Keyword {
-  keyword: string;
-  count: number;
-}
-
-// This is the interface for the incoming test data for geo charts
-export interface Coordinates {
-  coordinates: number[];
-}
-
-// This is the interface for the incoming test data for time series charts
-export interface TimeSeries {
-  date: string;
-  count: number;
-}
-
-// This is the interface for the transformed test data for time series charts
-export interface TimeSeriesTransformed {
-  date: number;
-  count: number;
-}
-
-export interface ITestDataObject {
-  location: ILocation;
-  date: DateInfo;
-  keyword: Keyword;
-}
-
-export type CrossfilterType = crossfilter.Crossfilter<ITestDataObject> | null;
-
-export type CrossfilterGroup = crossfilter.Grouping<
-  crossfilter.NaturallyOrderedValue,
-  unknown
->;
-
-export type CrossfilterDimensionString = crossfilter.Dimension<
-  ITestDataObject,
-  string
->;
-
-export type CrossfilterDimensionNumber = crossfilter.Dimension<
-  ITestDataObject,
-  number
->;
-
-export type TimeChartFilter = {
-  min?: number;
-  max?: number;
-};
-
-export type GeoChartFilter = number[] | [];
-
-export type Filters = {
-  filterType: "TIME" | "GEO";
-  timeFilter?: TimeChartFilter;
-  geoFilter?: GeoChartFilter;
-};
-
-export interface IUpdateDimensionPayload {
-  filter: Filters;
-  testData: ITestDataObject[];
-}
-
-export interface DimensionsObject {
-  locationDimension: CrossfilterDimensionNumber;
-  dateDimension: CrossfilterDimensionNumber;
-  keywordDimension: CrossfilterDimensionString;
 }
 
 /** All action types and corresponding payload types are to be defined here */
@@ -124,6 +38,13 @@ export const initialState: AppState = {
 export interface TemporalCoverage {
   start_date: string | null;
   end_date: string | null;
+}
+
+export interface FilterEntry {
+  type: "keyword" | "time" | "geo";
+  label: string;
+  datasetIds: IDatasetID[];
+  meta?: { timeRange?: TemporalCoverage; keywordData?: IKeywordData };
 }
 
 interface LocationData {
@@ -247,6 +168,15 @@ export interface ISyncStopResponse {
   message: string;
 }
 
+export interface ISyncResumeRequest {
+  job_id: string;
+}
+
+export interface ISyncResumeResponse {
+  message: string;
+  job_id: string;
+}
+
 export interface ISyncHistoryEntry {
   prefix: string;
   source_url: string;
@@ -258,4 +188,35 @@ export interface ISyncHistoryEntry {
 
 export interface ISyncHistoryResponse {
   result: ISyncHistoryEntry[];
+}
+
+// Staging inspection — a read-only sample of a source before ingest.
+export interface IExtractedRecord {
+  dataset: {
+    id: string;
+    title: string;
+    abstract: string | null;
+    uri: string;
+    publicationDate: string | null;
+    spatial: { west: number | null; east: number | null; south: number | null; north: number | null } | null;
+    temporal: { start: string | null; end: string | null } | null;
+    source?: string;
+  };
+  authors: Array<{ id: string; firstName: string; lastName: string }>;
+  keywords: Array<{ id: string; name: string }>;
+}
+
+export interface IInspectResult {
+  source: string;
+  selectedPrefix: string;
+  discovered: Array<{ prefix: string; rank: 0 | 1 | 3; selected: boolean }>;
+  sample: Array<{ raw: any; extracted: IExtractedRecord | null }>;
+  fidelity: {
+    sampled: number;
+    mapPct: number;
+    timePct: number;
+    abstractPct: number;
+    authorsAvg: number;
+    keywordsAvg: number;
+  };
 }

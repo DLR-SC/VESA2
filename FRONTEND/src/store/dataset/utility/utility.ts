@@ -1,4 +1,3 @@
-import createIntervalTree from "interval-tree-1d";
 import _ from "lodash";
 import {
   AuthorData,
@@ -6,9 +5,38 @@ import {
   IDataset,
   IDatasetID,
   IGeoData,
+  IKeywordData,
   ITimeData,
-  ITransformedTimeData,
 } from "types/appData";
+
+// Hides records belonging to disconnected source prefixes across every chart.
+// Records carry the prefix directly; keyword/author data only carry dataset ids,
+// so we derive the hidden-id set from the records and prune by membership.
+export const applySourceFilter = (
+  data: { datasets?: IDataset[]; keywords?: IKeywordData[]; authors?: AuthorData[] },
+  disconnected: string[]
+): { datasets: IDataset[]; keywords: IKeywordData[]; authors: AuthorData[] } => {
+  const datasets = data.datasets ?? [];
+  const keywords = data.keywords ?? [];
+  const authors = data.authors ?? [];
+  if (disconnected.length === 0) return { datasets, keywords, authors };
+
+  const hidden = new Set(disconnected);
+  const hiddenIds = new Set(
+    datasets.filter((d) => hidden.has(d.dataset_source_prefix)).map((d) => d.id)
+  );
+
+  return {
+    datasets: datasets.filter((d) => !hidden.has(d.dataset_source_prefix)),
+    keywords: keywords
+      .map((k) => ({ ...k, dataset_id: k.dataset_id.filter((id) => !hiddenIds.has(id)) }))
+      .filter((k) => k.dataset_id.length > 0)
+      .map((k) => ({ ...k, count: k.dataset_id.length })),
+    authors: authors
+      .map((a) => ({ ...a, datasets: a.datasets.filter((id) => !hiddenIds.has(id)) }))
+      .filter((a) => a.datasets.length > 0),
+  };
+};
 
 export const extractGeoData = (datasets: IDataset[]): IGeoData[] => {
   const hasValidLocation = (
@@ -33,7 +61,6 @@ export const extractGeoData = (datasets: IDataset[]): IGeoData[] => {
   }));
 };
 
-/** Utility function for deselecting geoData  */
 export const toggleSelectedGeoData = (
   selectedGeoData: IDatasetID[],
   datasetID: IDatasetID
@@ -46,30 +73,6 @@ export const toggleSelectedGeoData = (
   }
 };
 
-/** Utility function to update selectedGeoData points to exclude search term related data  */
-export const filterDatasetsIfChanged = (
-  locationData: IGeoData[],
-  selectedGeoDataset: IDatasetID[]
-): IDatasetID[] | null => {
-  const locationDataIds = new Set(locationData.map((data) => data.id));
-
-  const filteredSelectedGeoDataset = selectedGeoDataset.filter((id) =>
-    locationDataIds.has(id)
-  );
-
-  if (
-    filteredSelectedGeoDataset.length === selectedGeoDataset.length &&
-    filteredSelectedGeoDataset.every(
-      (id, index) => id === selectedGeoDataset[index]
-    )
-  ) {
-    return null;
-  }
-
-  return filteredSelectedGeoDataset;
-};
-
-/** utility function to get intersection of two datasetID arrays */
 export const getDatasetIDIntersection = (
   firsDatasetIDs: IDatasetID[],
   secondDatasetIDs: IDatasetID[]
@@ -77,155 +80,126 @@ export const getDatasetIDIntersection = (
   return _.intersection(firsDatasetIDs, secondDatasetIDs);
 };
 
-/** utility function to extract date data to create and set the timeData slice */
-export const extractAndTransformTimeData = (
-  data: IDataset[]
-): ITransformedTimeData[] => {
-  return (
-    _.chain(data)
-      .filter((item) => {
-        if (!_.isNull(item.temporal_coverage)) {
-          return (
-            item.temporal_coverage?.start_date !== null &&
-            item.temporal_coverage?.end_date !== null
-          );
-        }
-        return true;
-      })
-      .map((item) => {
-        let start = item.temporal_coverage?.start_date as any;
-        let end = item.temporal_coverage?.end_date as any;
-
-        // Check if start and end are the same day
-        const startDate = new Date(start);
-        const endDate = new Date(end);
-
-        if (
-          startDate.getFullYear() === endDate.getFullYear() &&
-          startDate.getMonth() === endDate.getMonth() &&
-          startDate.getDate() === endDate.getDate()
-        ) {
-          // Add an additional day to the end date
-          endDate.setDate(endDate.getDate() + 1);
-          end = endDate.toISOString();
-        }
-
-        return {
-          start,
-          end,
-          dataset_title: item.dataset_title,
-        };
-      })
-      // .orderBy(['start'], ['asc']) // Use 'start' directly for sorting as they are valid date strings
-      .value()
-  );
-};
-
-/** utility function to create interval timedata from startDate, endDate and timeData */
-export const intervalTreeFromTimedata = (
-  startDate: Date,
-  endDate: Date,
-  timeData: ITransformedTimeData[]
-): ITimeData[] => {
-  const numericIntervals = timeData.map((interval) => {
-    return [
-      new Date(interval.start).getTime(),
-      new Date(interval.end).getTime(),
-    ];
-  });
-
-  //@ts-ignore
-  const tree = createIntervalTree(numericIntervals);
-  const intersectionCounts = [];
-  for (
-    let currentDay = new Date(startDate);
-    currentDay <= endDate;
-    currentDay.setDate(currentDay.getDate() + 1)
-  ) {
-    let queryResult = 0;
-    //@ts-ignore
-    tree.queryPoint(currentDay.getTime(), () => {
-      queryResult++;
-    });
-    intersectionCounts.push(queryResult);
-  }
-  const result = [];
-  for (let i = 0; i < intersectionCounts.length; i++) {
-    let currentDate = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
-    // let dateString = currentDate.toISOString().split("T")[0]; // Format date as "YYYY-MM-DD"
-    let dateString = currentDate.getTime();
-    result.push({
-      date: dateString,
-      value: intersectionCounts[i],
-    });
-  }
-
-  return result;
-};
-
-/**Utility function to get the IDatasetID from IDataset */
 export const getDatasetID = (dataset: IDataset[]): IDatasetID[] => {
   return dataset.map((item) => item.id);
 };
 
-/**Utility function to process author data fopr node link diagram */
-export const processAuthorData = (data: AuthorData[]): ChordData[] => {
-  // Create an object to store the unique datasetss contributed by each pair of authors
-  let datasetsCounts: { [key: string]: Set<string> } = {};
+const DAY_MS = 86_400_000;
 
-  // Iterate through the data to count the unique datasetss contributed by each pair of authors
-  data.forEach((entry) => {
-    const { author, datasets } = entry;
-
-    // Iterate through the datasetss of the current author
-    datasets.forEach((datasetsTitle) => {
-      // Initialize an empty Set to store unique authors who contributed to this datasets
-      let authorsContributed = new Set<string>();
-
-      // Find authors who contributed to the current datasets
-      data.forEach((otherEntry) => {
-        if (otherEntry.datasets.includes(datasetsTitle)) {
-          authorsContributed.add(otherEntry.author);
-        }
-      });
-
-      // Exclude the current author from the set
-      authorsContributed.delete(author);
-
-      // Iterate through the other authors
-      authorsContributed.forEach((otherAuthor) => {
-        const key =
-          author < otherAuthor
-            ? `${author}-${otherAuthor}`
-            : `${otherAuthor}-${author}`;
-        // Initialize an empty Set to store unique datasetss contributed by the pair of authors
-        datasetsCounts[key] = datasetsCounts[key] || new Set<string>();
-        // Add the current datasets to the Set
-        datasetsCounts[key].add(datasetsTitle);
-      });
-    });
+export function computeTimeDataAsync(dataset: IDataset[]): Promise<ITimeData[]> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(
+      new URL("../../../workers/timeDataWorker.ts", import.meta.url),
+      { type: "module" }
+    );
+    worker.onmessage = (e: MessageEvent<ITimeData[]>) => {
+      resolve(e.data);
+      worker.terminate();
+    };
+    worker.onerror = (err) => {
+      reject(err);
+      worker.terminate();
+    };
+    worker.postMessage(dataset);
   });
+}
 
-  // Convert unique datasets counts into the format required by amCharts
-  let formattedData: ChordData[] = [];
-  for (const [key, value] of Object.entries(datasetsCounts)) {
-    const [author1, author2] = key.split("-");
-    formattedData.push({ from: author1, to: author2, value: value.size });
+export function computeTimeData(dataset: IDataset[]): ITimeData[] {
+  const dayCounts = new Map<number, number>();
+  for (const item of dataset) {
+    if (!item.temporal_coverage) continue;
+    const { start_date, end_date } = item.temporal_coverage;
+    if (!start_date || !end_date) continue;
+    const sKey = Math.floor(new Date(start_date).getTime() / DAY_MS);
+    const eKey = Math.floor(new Date(end_date).getTime() / DAY_MS);
+    if (isNaN(sKey) || isNaN(eKey) || eKey < sKey) continue;
+    for (let k = sKey; k <= eKey; k++) {
+      dayCounts.set(k, (dayCounts.get(k) ?? 0) + 1);
+    }
+  }
+  return [...dayCounts.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([key, value]) => ({ date: key * DAY_MS, value }));
+}
+
+export const processAuthorData = (data: AuthorData[]): ChordData[] => {
+  // Limit to the top-N most prolific authors before the O(n²) pairing step.
+  // The chord slice is already capped at 100 entries; generating all possible pairs
+  // from the full author set is wasted work.
+  const TOP_AUTHORS = 60;
+  const topAuthorSet = new Set(
+    [...data]
+      .sort((a, b) => b.datasets.length - a.datasets.length)
+      .slice(0, TOP_AUTHORS)
+      .map((a) => a.author)
+  );
+
+  // Step 1: build dataset→authors index (top authors only)
+  const datasetToAuthors = new Map<string, string[]>();
+  for (const { author, datasets } of data) {
+    if (!topAuthorSet.has(author)) continue;
+    for (const dataset of datasets) {
+      let authors = datasetToAuthors.get(dataset as string);
+      if (!authors) {
+        authors = [];
+        datasetToAuthors.set(dataset as string, authors);
+      }
+      authors.push(author);
+    }
+  }
+
+  // Step 2: generate all co-author pairs and count shared datasets
+  const pairDatasets = new Map<string, Set<string>>();
+  for (const [dataset, authors] of datasetToAuthors) {
+    for (let i = 0; i < authors.length; i++) {
+      for (let j = i + 1; j < authors.length; j++) {
+        const a = authors[i];
+        const b = authors[j];
+        const key = a < b ? `${a}-${b}` : `${b}-${a}`;
+        let shared = pairDatasets.get(key);
+        if (!shared) {
+          shared = new Set<string>();
+          pairDatasets.set(key, shared);
+        }
+        shared.add(dataset);
+      }
+    }
+  }
+
+  const pairedAuthors = new Set<string>();
+  for (const key of pairDatasets.keys()) {
+    const dashIdx = key.indexOf("-");
+    pairedAuthors.add(key.slice(0, dashIdx));
+    pairedAuthors.add(key.slice(dashIdx + 1));
+  }
+
+  const formattedData: ChordData[] = [];
+  for (const [key, shared] of pairDatasets) {
+    const dashIdx = key.indexOf("-");
+    formattedData.push({
+      from: key.slice(0, dashIdx),
+      to: key.slice(dashIdx + 1),
+      value: shared.size,
+    });
+  }
+
+  // Authors with no co-authorship pairs get a self-link so their node is visible.
+  for (const { author, datasets } of data) {
+    if (topAuthorSet.has(author) && !pairedAuthors.has(author)) {
+      formattedData.push({ from: author, to: author, value: datasets.length });
+    }
   }
 
   return formattedData;
 };
 
-/** Utility function to convert Date from javascript Date string to 'dd-mm-yyyy' */
 export const convertToDateString = (date: Date) => {
   const day = date.getDate().toString().padStart(2, "0");
-  const month = (date.getMonth() + 1).toString().padStart(2, "0"); // Months are zero-based
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
   const year = date.getFullYear();
-
   return `${day}-${month}-${year}`;
 };
 
-/** Utility function to calculate first and second row height for the chart display. Minimum height first row and second row can have is 500px and 400px respectively  */
 export const calculateRowHeights = (
   viewportHeight: number,
   navbarHeight: number
@@ -233,14 +207,11 @@ export const calculateRowHeights = (
   const minHeightFirstRow = 500;
   const minHeightSecondRow = 400;
 
-  // Calculate the remaining height after subtracting the navbar and additional 100px
   const remainingHeight = viewportHeight - navbarHeight - 100;
 
-  // Calculate the ideal heights based on the 5:4 ratio
   let firstRowHeight = (remainingHeight * 5) / 9;
   let secondRowHeight = (remainingHeight * 4) / 9;
 
-  // Ensure that the heights meet the minimum requirements
   if (firstRowHeight < minHeightFirstRow) {
     firstRowHeight = minHeightFirstRow;
     secondRowHeight = remainingHeight - minHeightFirstRow + minHeightSecondRow;

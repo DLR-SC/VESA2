@@ -89,7 +89,42 @@ export const getIngestionRouter = () => {
     res.json({ message: 'Stop signal sent to the orchestrator.' });
   });
 
-  // 5. GET /sync/history
+  // 5. POST /sync/resume
+  router.post('/resume', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { job_id } = req.body;
+      if (!job_id) {
+        res.status(400).json({ error: 'job_id is required' });
+        return;
+      }
+      const resumedJobId = await orchestrator.resume(job_id);
+      res.status(202).json({ message: 'Resume started.', job_id: resumedJobId });
+    } catch (error: any) {
+      console.error('[Ingestion API] Resume error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // 6b. DELETE /sync/source/:prefix — permanently removes a source's data. Idempotent.
+  router.delete('/source/:prefix', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { prefix } = req.params;
+      const status = orchestrator.getStatus();
+      if (status.status === 'running' && status.current_prefix === prefix) {
+        res.status(409).json({ error: `Cannot delete '${prefix}' while it is importing. Stop the import first.` });
+        return;
+      }
+      await orchestrator.purgeSource(prefix);
+      // Drop stale in-memory state so /sync/status won't report this deleted job once SyncLogs is empty.
+      if (orchestrator.getStatus().current_prefix === prefix) orchestrator.resetState();
+      res.status(204).end();
+    } catch (error: any) {
+      console.error("[Ingestion API] Delete source error:", error);
+      res.status(500).json({ error: "Failed to delete the data source." });
+    }
+  });
+
+  // 6. GET /sync/history
   router.get('/history', async (_req: Request, res: Response): Promise<void> => {
     try {
       const cursor = await db.query(syncHistoryQuery);

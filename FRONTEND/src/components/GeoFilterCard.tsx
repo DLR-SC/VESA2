@@ -1,6 +1,6 @@
 import { Button, Grid, Typography, useTheme } from "@mui/material";
 import { useCallback } from "react";
-import { setSelectedGeoData } from "../store/dataset/datasetSlice";
+import { removeFilter } from "../store/dataset/datasetSlice";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { ILocation } from "types/appData";
 
@@ -10,8 +10,8 @@ interface IGeoFilterCard {
 
 function GeoFilterCard(props: IGeoFilterCard): JSX.Element {
   const theme = useTheme();
-  const selectedGeoData = useAppSelector(
-    (state) => state.dataset.selectedGeoData
+  const geoFilterCount = useAppSelector(
+    (state) => state.dataset.filterStack.find((e) => e.type === "geo")?.datasetIds.length ?? 0
   );
   const dispatch = useAppDispatch();
 
@@ -35,7 +35,7 @@ function GeoFilterCard(props: IGeoFilterCard): JSX.Element {
   }, [props.hoverPoints]);
 
   const resetFilter = () => {
-    dispatch(setSelectedGeoData([]));
+    dispatch(removeFilter("geo"));
   };
 
   return (
@@ -46,7 +46,7 @@ function GeoFilterCard(props: IGeoFilterCard): JSX.Element {
           {formattedCoordinates()}
         </Grid>
         <Grid item>
-          {selectedGeoData.length ? (
+          {geoFilterCount ? (
             <Button
               variant="outlined"
               sx={{ padding: 0 }}

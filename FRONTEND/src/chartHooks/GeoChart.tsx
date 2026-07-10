@@ -49,6 +49,17 @@ const GeoChart: React.FC<IGeoChartProps> = ({
   const legendRef = useRef<am5.Legend | null>(null);
   const selectedLegendRef = useRef<am5.Legend | null>(null);
 
+  // Stable ref so the data-rebuild effect can read the current selection
+  // without listing selectedIDs as a dependency (which would cause a full rebuild on click).
+  const selectedIDsRef = useRef<IDatasetID[]>(selectedIDs);
+  useEffect(() => {
+    selectedIDsRef.current = selectedIDs;
+  }, [selectedIDs]);
+
+  // Registry of live bullet circles keyed by dataset ID.
+  // Populated by createBullet on each data.setAll(); cleared before each rebuild.
+  const bulletMapRef = useRef<Map<IDatasetID, am5.Circle>>(new Map());
+
   const { data: historyData } = useGetSyncHistoryQuery();
   const sources: SourceColor[] = useMemo(
     () =>
@@ -65,32 +76,51 @@ const GeoChart: React.FC<IGeoChartProps> = ({
     sourceColorRef.current = sources;
   }, [sources]);
 
-  // Map incoming data to geoData format
+  // Rebuild map data only when the dataset itself changes.
+  // Reads selectedIDsRef (not selectedIDs) so a click never triggers a full data rebuild.
   useEffect(() => {
-    const geoJSONData: GeoDataItem[] = data.map((item) => ({
-      geometry: { type: "Point", coordinates: item.coordinates },
-      id: item.id,
-      groupId: selectedIDs.includes(item.id) ? "active" : item.groupId,
-    }));
-    setGeoData(geoJSONData);
-  }, [data, selectedIDs]);
+    setGeoData(
+      data.map((item) => ({
+        geometry: { type: "Point", coordinates: item.coordinates },
+        id: item.id,
+        groupId: selectedIDsRef.current.includes(item.id) ? "active" : item.groupId,
+      }))
+    );
+  }, [data]);
 
-  // Initialize the chart once
+  // When selection changes, update bullet active states via the registry.
+  // No data.setAll() — the map is not rebuilt and the viewport stays stable.
   useEffect(() => {
-    const root = am5.Root.new("map-chart");
-    root.setThemes([am5themes_Animated.new(root)]);
+    bulletMapRef.current.forEach((circle, id) => {
+      circle.set("active", selectedIDs.includes(id));
+    });
+  }, [selectedIDs]);
 
-    const mapChart = createChart(root);
-    setChart(mapChart);
+  // Initialize the chart once, deferred so the browser can paint the shell first.
+  // setChart() called inside the timeout triggers re-render; the geoData update
+  // effect will have already run (geoData is derived from props.data on mount),
+  // so the chart update effect fires immediately with data ready.
+  useEffect(() => {
+    let root: am5.Root | undefined;
+    const id = setTimeout(() => {
+      root = am5.Root.new("map-chart");
+      root.setThemes([am5themes_Animated.new(root)]);
 
-    const zoomControl = createZoomControl(root, mapChart, setToggleLegend);
-    mapChart.set("zoomControl", zoomControl);
+      const mapChart = createChart(root);
+      setChart(mapChart);
 
-    createMapPolygonSeries(root, mapChart);
-    createPointSeries(root, mapChart, selectedCoordinate, onPointHover, sourceColorRef);
-    createLegends(root, mapChart, legendRef, selectedLegendRef);
+      const zoomControl = createZoomControl(root, mapChart, setToggleLegend);
+      mapChart.set("zoomControl", zoomControl);
 
-    return () => root.dispose();
+      createMapPolygonSeries(root, mapChart);
+      createPointSeries(root, mapChart, selectedCoordinate, onPointHover, sourceColorRef, bulletMapRef);
+      createLegends(root, mapChart, legendRef, selectedLegendRef);
+    }, 0);
+
+    return () => {
+      clearTimeout(id);
+      root?.dispose();
+    };
   }, []);
 
   // Update legend entries whenever source list changes
@@ -122,13 +152,16 @@ const GeoChart: React.FC<IGeoChartProps> = ({
     if (legendRef.current) legendRef.current.set("visible", toggleLegend);
   }, [toggleLegend]);
 
-  // Update pointSeries data when geoData changes
+  // Update pointSeries data when geoData changes.
+  // Clear the bullet registry first so stale circles from the old dataset don't persist.
   useEffect(() => {
     if (!chart) return;
     const pointSeries = chart.series.values.find(
       (s) => s instanceof am5map.ClusteredPointSeries
     ) as am5map.ClusteredPointSeries | undefined;
-    pointSeries?.data.setAll(geoData);
+    if (!pointSeries) return;
+    bulletMapRef.current.clear();
+    pointSeries.data.setAll(geoData);
   }, [geoData, chart]);
 
   return <div id="map-chart" className="chart_div"></div>;
@@ -209,7 +242,8 @@ function createPointSeries(
   chart: am5map.MapChart,
   selectedCoordinate: (id: IDatasetID) => void,
   onPointHover: IPointHoverHandler,
-  sourceColorRef: React.MutableRefObject<SourceColor[]>
+  sourceColorRef: React.MutableRefObject<SourceColor[]>,
+  bulletMapRef: React.MutableRefObject<Map<IDatasetID, am5.Circle>>
 ): am5map.ClusteredPointSeries {
   const pointSeries = chart.series.push(
     am5map.ClusteredPointSeries.new(root, {
@@ -224,7 +258,7 @@ function createPointSeries(
   );
 
   pointSeries.bullets.push((root, _series, dataItem) =>
-    createBullet(root, dataItem, selectedCoordinate, onPointHover, sourceColorRef)
+    createBullet(root, dataItem, selectedCoordinate, onPointHover, sourceColorRef, bulletMapRef)
   );
 
   return pointSeries;
@@ -299,7 +333,8 @@ function createBullet(
   dataItem: am5.DataItem<am5map.IClusteredPointSeriesDataItem>,
   selectedCoordinate: (id: IDatasetID) => void,
   onPointHover: IPointHoverHandler,
-  sourceColorRef: React.MutableRefObject<SourceColor[]>
+  sourceColorRef: React.MutableRefObject<SourceColor[]>,
+  bulletMapRef: React.MutableRefObject<Map<IDatasetID, am5.Circle>>
 ): am5.Bullet {
   const item = dataItem.dataContext as GeoDataItem;
   const coordinates = dataItem.get("geometry")?.coordinates as [number, number];
@@ -321,6 +356,8 @@ function createBullet(
   circle.states.create("hover", { scale: 1.4 });
   circle.states.create("active", { fill: am5.color(ACTIVE_COLOR), scale: 1.3 });
   circle.set("active", item.groupId === "active");
+
+  bulletMapRef.current.set(item.id, circle);
 
   return am5.Bullet.new(root, { sprite: circle });
 }

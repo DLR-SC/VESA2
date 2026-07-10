@@ -1,31 +1,31 @@
 import { CircularProgress } from "@mui/material";
 import CenteredCard from "../components/CenteredCard";
-import { useDatafill } from "../hooks/useDatafill";
 import _ from "lodash";
 import { IContainerProps, TemporalCoverage } from "types/appData";
-import LineSeriesChart from "../chartHooks/LineSeriesChart";
 import EmptyDatasetCard from "../components/EmptyDatasetCard";
-import { useAppSelector } from "../store/hooks";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { useGetInitialDatasetsQuery } from "../store/services/dataApi";
 import { convertToDateString } from "../store/dataset/utility/utility";
+import { filterByTimeRange } from "../store/dataset/datasetSlice";
 import ColumnSeriesChart from "../chartHooks/ColumnSeriesChart";
+import React from "react";
 
 function LineSeriesChartContainer(props: IContainerProps): JSX.Element {
-  const containerHeight = "400px";
   const { isFetching } = useGetInitialDatasetsQuery();
   const timeData = useAppSelector((state) => state.dataset.timeData);
+  const dispatch = useAppDispatch();
 
-  const { initialDateRanges, fetchAndSetAgainstTimeData } = useDatafill();
+  // Stable debounce — created once, survives re-renders so timeData updates
+  // don't reset the 500ms timer mid-flight.
+  const debouncedHandleScroll = React.useRef(
+    _.debounce((range: TemporalCoverage) => {
+      dispatch(filterByTimeRange(range));
+    }, 500)
+  ).current;
 
-  const debouncedHandleScroll = _.debounce((range: TemporalCoverage) => {
-    fetchAndSetAgainstTimeData(range);
-  }, 500);
-
-  const handleScroll = (range: TemporalCoverage) => {
-    debouncedHandleScroll(range);
-  };
-
-  if (isFetching) {
+  // timeData is null until the worker has produced a result (even an empty one), so
+  // spin through both the HTTP fetch and the worker phase — empty result != pending.
+  if (isFetching || timeData === null) {
     return (
       <CenteredCard>
         <CircularProgress size={60} />
@@ -33,17 +33,22 @@ function LineSeriesChartContainer(props: IContainerProps): JSX.Element {
     );
   }
 
+  const firstDate = timeData.length
+    ? new Date(timeData[0].date as number)
+    : new Date("1950-01-01");
+  const lastDate = timeData.length
+    ? new Date(timeData[timeData.length - 1].date as number)
+    : new Date("2030-01-01");
+
   return timeData.length ? (
-    <>
-      <ColumnSeriesChart
-        data={timeData}
-        handleScroll={handleScroll}
-        initialDate={{
-          start_date: convertToDateString(initialDateRanges.startDate),
-          end_date: convertToDateString(initialDateRanges.endDate),
-        }}
-      />
-    </>
+    <ColumnSeriesChart
+      data={timeData}
+      handleScroll={debouncedHandleScroll}
+      initialDate={{
+        start_date: convertToDateString(firstDate),
+        end_date: convertToDateString(lastDate),
+      }}
+    />
   ) : (
     <EmptyDatasetCard />
   );

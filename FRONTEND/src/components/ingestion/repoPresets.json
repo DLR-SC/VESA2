@@ -1,0 +1,8 @@
+[
+  { "id": "pangaea",   "label": "PANGAEA",   "oaiUrl": "https://ws.pangaea.de/oai/provider",            "set": "citable", "dataset": "pangaea",   "batchDelay": 1, "proxyPath": "/proxy/pangaea" },
+  { "id": "gbif",      "label": "GBIF",      "oaiUrl": "https://api.gbif.org/v1/oai-pmh/registry",       "set": "",        "dataset": "gbif",      "batchDelay": 5, "proxyPath": "/proxy/gbif" },
+  { "id": "zenodo",    "label": "Zenodo",    "oaiUrl": "https://zenodo.org/oai2d",                       "set": "",        "dataset": "zenodo",    "batchDelay": 1, "proxyPath": "/proxy/zenodo" },
+  { "id": "arxiv",     "label": "arXiv",     "oaiUrl": "https://oaipmh.arxiv.org/oai",                   "set": "",        "dataset": "arxiv",     "batchDelay": 5 },
+  { "id": "figshare",  "label": "Figshare",  "oaiUrl": "https://api.figshare.com/v2/oai",                "set": "",        "dataset": "figshare",  "batchDelay": 2 },
+  { "id": "dataverse", "label": "Dataverse", "oaiUrl": "https://dataverse.harvard.edu/oai",              "set": "",        "dataset": "dataverse", "batchDelay": 2 }
+]
