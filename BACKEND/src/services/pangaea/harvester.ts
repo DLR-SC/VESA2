@@ -187,7 +187,7 @@ export async function harvestPangaea(db: Database, limit = 10000) {
 
     try {
       const { data } = await axios.get(url);
-      const jsonObj = parser.parse(data);
+      const jsonObj: any = parser.parse(data);
       const listRecords = jsonObj["OAI-PMH"]?.ListRecords;
 
       if (!listRecords?.record) break;
