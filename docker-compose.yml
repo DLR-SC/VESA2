@@ -1,6 +1,6 @@
 services:
   arangodb:
-    image: arangodb:latest
+    image: docker.io/arangodb:latest # fully qualified for Podman
     ports:
       - "8529:8529"
     environment:
@@ -9,6 +9,8 @@ services:
       - vesa_arango_data:/var/lib/arangodb3
     networks:
       - app-network
+    # "always" (not "unless-stopped"): Podman's podman-restart.service only brings back "always" containers after a reboot.
+    restart: always
 
   backend:
     build:
@@ -25,7 +27,7 @@ services:
       - arangodb
     networks:
       - app-network
-    restart: on-failure
+    restart: always
 
   frontend:
     build:
@@ -36,6 +38,7 @@ services:
       - backend
     networks:
       - app-network
+    restart: always
 
 networks:
   app-network:

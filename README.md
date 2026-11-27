@@ -51,6 +51,15 @@ ArangoDB credentials: `root` / `root`
 
 The frontend calls the backend through `/api` on the same host and port (nginx forwards it to the backend container), so the app works when opened from any machine. For a remote deployment only port 3000 needs to be reachable; no backend URL needs configuring.
 
+**Running on a server with Podman:** every service has `restart: always`, so crashed containers restart by themselves. To also bring VESA back after a reboot, run this once on the server for the user that owns the containers:
+
+```bash
+sudo loginctl enable-linger <user>              # keep that user's containers running without a login session
+systemctl --user enable podman-restart.service  # run as <user>: restarts "always" containers at boot
+```
+
+Only containers removed with `podman compose down` stay down; start them again with `podman compose up -d`.
+
 > 💡 **TIP**
 > To stop the application run `docker compose down`. To also remove the database volume run `docker compose down --volumes`.
 
