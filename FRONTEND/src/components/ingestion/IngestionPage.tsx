@@ -55,14 +55,16 @@ const IngestionPage: React.FC = () => {
 				refetchHistory();
 			}
 			setErrorMsg(null);
-		} else if (isStopped && job_id !== ignoredJobId) {
+		} else if ((isStopped || status === 'failed') && job_id !== ignoredJobId) {
+			// A stopped or failed job stays on the Import step (Resume / Start Over / Reset) until the
+			// user resets it; Reset ignores that job_id, so the next status poll can't bring the error back.
 			if (activeStep !== 2) {
 				setConfig((prev) => ({ url, prefix: current_prefix, limit: total, color: prev?.color ?? '#543CF0', batchDelay: prev?.batchDelay ?? 1000 }));
 				setActiveStep(2);
 			}
-			setErrorMsg(`Synchronization stopped. Processed ${processed} of ${total} records. Please start a New Import.`);
-		} else if (status === 'failed') {
-			setErrorMsg(error_message || 'The previous synchronization process failed.');
+			setErrorMsg(status === 'failed'
+				? error_message || 'The previous synchronization process failed.'
+				: `Synchronization stopped. Processed ${processed} of ${total} records. Please start a New Import.`);
 		}
 	}, [isSuccess, syncStatus, activeStep, ignoredJobId]);
 
