@@ -49,6 +49,8 @@ Docker will build and start all three services in the correct order (ArangoDB â†
 
 ArangoDB credentials: `root` / `root`
 
+The frontend calls the backend through `/api` on the same host and port (nginx forwards it to the backend container), so the app works when opened from any machine. For a remote deployment only port 3000 needs to be reachable; no backend URL needs configuring.
+
 > ðŸ’¡ **TIP**
 > To stop the application run `docker compose down`. To also remove the database volume run `docker compose down --volumes`.
 

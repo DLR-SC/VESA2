@@ -8,6 +8,12 @@ import { syncHistoryQuery } from '../queries/syncHistoryQuery';
 const orchestrator = new SyncOrchestrator(db);
 const validator = new HandshakeValidator();
 
+// The UI sends this server's own proxies as relative paths ("/oai/records?...", "/proxy/pangaea/records"),
+// because the browser can't know the backend's address inside Docker. Resolve those against this process;
+// absolute URLs pass through unchanged. Port fallback matches index.ts.
+const SELF_BASE = `http://127.0.0.1:${Number(process.env.NODE_PORT) || 3000}`;
+const resolveTarget = (url: string) => new URL(url, SELF_BASE).toString();
+
 export const getIngestionRouter = () => {
   const router = express.Router();
 
@@ -30,7 +36,7 @@ export const getIngestionRouter = () => {
         }
       }
 
-      const result = await validator.validate(target_url);
+      const result = await validator.validate(resolveTarget(target_url));
       if (!result.valid) {
         let status = 400;
         if (result.reason === 'invalid_schema') status = 422;
@@ -56,7 +62,7 @@ export const getIngestionRouter = () => {
       }
 
       // Start the sync process and await the Job ID
-      const jobId = await orchestrator.sync(target_url, dataset_id, total_limit || 1000, batch_size || 100, overwrite, inter_batch_sleep_ms ?? 1000, ui_config ?? {});
+      const jobId = await orchestrator.sync(resolveTarget(target_url), dataset_id, total_limit || 1000, batch_size || 100, overwrite, inter_batch_sleep_ms ?? 1000, ui_config ?? {});
 
       res.status(202).json({
         message: 'Sync started.',

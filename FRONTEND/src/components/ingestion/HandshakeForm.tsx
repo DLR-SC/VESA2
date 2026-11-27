@@ -3,8 +3,6 @@ import { Box, TextField, Typography, Alert, Button, Stack, useTheme, AlertTitle,
 import CheckIcon from '@mui/icons-material/Check';
 import repoPresets from './repoPresets.json';
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string) || '';
-
 // Known OAI-PMH repositories — prefill the real base URL; the proxy negotiates the schema.
 // Add sources by editing repoPresets.json (no code change). `set` may be "" and `batchDelay`
 // is in seconds. `proxyPath` (optional) is a bundled hand-written proxy for that source, surfaced
@@ -77,7 +75,8 @@ const HandshakeForm: React.FC<HandshakeFormProps> = ({ onInspect, onIngestDirect
 
   // Prefill Custom Proxy with a bundled hand-written proxy — a working example of the /records contract.
   const handleExampleProxy = (preset: RepoPreset) => {
-    setProxyUrl(`${BASE_URL}${preset.proxyPath}`);
+    // Backend-relative path: the backend fetches it and resolves it against itself.
+    setProxyUrl(preset.proxyPath ?? '');
     setPrefix(preset.dataset);
   };
 

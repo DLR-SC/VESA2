@@ -6,8 +6,6 @@ import SchemaBoard from './SchemaBoard';
 import FidelityBar from './FidelityBar';
 import RecordInspector from './RecordInspector';
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string) || '';
-
 export interface StagingConfig {
   source: string;        // raw OAI base URL
   set?: string;
@@ -66,7 +64,8 @@ const StagingView: React.FC<Props> = ({ config, onIngest, onBack }) => {
     const p = new URLSearchParams({ source });
     if (set) p.set('set', set);
     p.set('prefix', result.selectedPrefix); // pin the inspected schema so ingest skips re-negotiation
-    onIngest({ url: `${BASE_URL}/oai/records?${p.toString()}`, prefix: datasetLabel, limit, color, batchDelay, overwrite: conflict ? overwrite : undefined });
+    // Backend-relative: the backend harvests its own /oai proxy (resolved server-side).
+    onIngest({ url: `/oai/records?${p.toString()}`, prefix: datasetLabel, limit, color, batchDelay, overwrite: conflict ? overwrite : undefined });
   };
 
   if (!result && isFetching) {
