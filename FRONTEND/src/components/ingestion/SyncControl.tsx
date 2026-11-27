@@ -4,6 +4,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import ReplayIcon from '@mui/icons-material/Replay';
 import { useStartSyncMutation, useStopSyncMutation, useResumeSyncMutation } from '../../store/services/syncApi';
+import { sourceLabel } from './sourceLabel';
 
 interface SyncControlProps {
 	config: { url: string; prefix: string; limit: number; color: string; batchDelay: number; overwrite?: boolean };
@@ -27,7 +28,7 @@ const SyncControl: React.FC<SyncControlProps> = ({ config, status }) => {
 			<Stack spacing={3}>
 					{config.url && (
 					<Typography variant="body2" color="text.secondary">
-						Connected to <b>{config.url}</b>. Ready to process <b>{config.limit}</b> records for dataset <b>{config.prefix}</b>.
+						Connected to <b>{sourceLabel(config.url)}</b>. Ready to process <b>{config.limit}</b> records for dataset <b>{config.prefix}</b>.
 					</Typography>
 				)}
 				

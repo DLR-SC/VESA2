@@ -5,6 +5,7 @@ import { useGetSyncHistoryQuery, useDeleteSourceMutation } from '../../store/ser
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { toggleSourceConnection } from '../../store/ui/uiSlice';
 import { hardReset } from '../../store';
+import { sourceLabel } from './sourceLabel';
 
 const fmt = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -96,7 +97,7 @@ const ConnectedSources: React.FC = () => {
               color="text.disabled"
               sx={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
             >
-              {source.source_url}
+              {sourceLabel(source.source_url)}
             </Typography>
             <Typography variant="caption" color="text.disabled">
               {fmt(source.end_time)}
