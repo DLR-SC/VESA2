@@ -1,8 +1,6 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import {
   ISyncState,
-  ISyncValidateRequest,
-  ISyncValidateResponse,
   ISyncStartRequest,
   ISyncStartResponse,
   ISyncStopResponse,
@@ -17,13 +15,6 @@ export const syncApi = createApi({
   baseQuery: fetchBaseQuery({ baseUrl: import.meta.env.VITE_API_URL }),
   tagTypes: ['Sync'],
   endpoints: (builder) => ({
-    validateUrl: builder.mutation<ISyncValidateResponse, ISyncValidateRequest>({
-      query: (req) => ({
-        url: "sync/validate",
-        method: "POST",
-        body: req,
-      }),
-    }),
     startSync: builder.mutation<ISyncStartResponse, ISyncStartRequest>({
       query: (req) => ({
         url: "sync/start",
@@ -78,7 +69,6 @@ export const syncApi = createApi({
 });
 
 export const {
-  useValidateUrlMutation,
   useStartSyncMutation,
   useGetSyncStatusQuery,
   useStopSyncMutation,

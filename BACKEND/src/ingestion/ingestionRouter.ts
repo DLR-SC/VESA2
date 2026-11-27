@@ -1,12 +1,10 @@
 import express, { Request, Response } from 'express';
-import { HandshakeValidator } from './validation/HandshakeValidator';
-import { SyncOrchestrator } from './SyncOrchestrator';
+import { SyncOrchestrator, SyncBusyError } from './SyncOrchestrator';
 import { db } from '../database';
 import { syncHistoryQuery } from '../queries/syncHistoryQuery';
 
-// Instantiateorchestrator outside to maintain state across requests
+// One orchestrator for the process, so its state survives across requests.
 const orchestrator = new SyncOrchestrator(db);
-const validator = new HandshakeValidator();
 
 // The UI sends this server's own proxies as relative paths ("/oai/records?...", "/proxy/pangaea/records"),
 // because the browser can't know the backend's address inside Docker. Resolve those against this process;
@@ -17,42 +15,7 @@ const resolveTarget = (url: string) => new URL(url, SELF_BASE).toString();
 export const getIngestionRouter = () => {
   const router = express.Router();
 
-  // 1. POST /sync/validate
-  router.post('/validate', async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { target_url, dataset_id, overwrite } = req.body;
-      if (!target_url || !dataset_id) {
-        res.status(400).json({ error: 'target_url and dataset_id are required' });
-        return;
-      }
-      
-      if (!overwrite) {
-        const exists = await orchestrator.checkDatasetExists(dataset_id);
-        if (exists) {
-          res.status(409).json({ 
-            error: `A dataset with the label '${dataset_id}' already exists.` 
-          });
-          return;
-        }
-      }
-
-      const result = await validator.validate(resolveTarget(target_url));
-      if (!result.valid) {
-        let status = 400;
-        if (result.reason === 'invalid_schema') status = 422;
-        else if (result.reason === 'source_offline' || result.reason === 'unreachable') status = 502;
-        
-        res.status(status).json(result);
-        return;
-      }
-      res.json(result);
-    } catch (error: any) {
-      console.error("[Ingestion API] Validation error:", error);
-      res.status(500).json({ error: "An unexpected error occurred while verifying the connection. Please try again." });
-    }
-  });
-
-  // 2. POST /sync/start
+  // POST /sync/start — the job's first page doubles as the handshake (see SyncOrchestrator.harvest).
   router.post('/start', async (req: Request, res: Response): Promise<void> => {
     try {
       const { target_url, dataset_id, batch_size, total_limit, overwrite, inter_batch_sleep_ms, ui_config } = req.body;
@@ -71,6 +34,10 @@ export const getIngestionRouter = () => {
         job_id: jobId
       });
     } catch (error: any) {
+      if (error instanceof SyncBusyError) {
+        res.status(409).json({ error: error.message });
+        return;
+      }
       console.error("[Ingestion API] Start error:", error);
       res.status(500).json({ error: "An unexpected error occurred while starting the import." });
     }
@@ -106,6 +73,10 @@ export const getIngestionRouter = () => {
       const resumedJobId = await orchestrator.resume(job_id);
       res.status(202).json({ message: 'Resume started.', job_id: resumedJobId });
     } catch (error: any) {
+      if (error instanceof SyncBusyError) {
+        res.status(409).json({ error: error.message });
+        return;
+      }
       console.error('[Ingestion API] Resume error:', error);
       res.status(500).json({ error: error.message });
     }

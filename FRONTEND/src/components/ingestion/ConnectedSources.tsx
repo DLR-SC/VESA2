@@ -70,6 +70,7 @@ const ConnectedSources: React.FC = () => {
             <Stack direction="row" alignItems="center" spacing={1}>
               <Typography variant="caption" color="text.disabled">
                 {source.count_success.toLocaleString()} records
+                {source.status !== 'completed' && ` · partial (${source.status})`}
               </Typography>
               <Tooltip title={isConnected ? 'Disconnect (hide from charts)' : 'Connect (show in charts)'}>
                 <Switch

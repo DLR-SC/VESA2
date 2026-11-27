@@ -1,17 +1,15 @@
 import { Database } from 'arangojs';
 import axios from 'axios';
-import { HandshakeValidator } from './validation/HandshakeValidator';
+import { setTimeout as sleep } from 'timers/promises';
+import { checkRecord, describeFetchError } from './validation/HandshakeValidator';
 import { PrefixingService } from './services/PrefixingService';
-import { RelationExtractor, GraphPayload } from './services/RelationExtractor';
+import { RelationExtractor } from './services/RelationExtractor';
 import { GraphWriter } from './services/GraphWriter';
 import { IDataAdapter } from './contracts/IDataAdapter';
 
-// Global flag to disable prefixing logic entirely for testing purposes.
-export const SKIP_PREFIXING_TEST_MODE = false;
+export type SyncStatus = 'idle' | 'running' | 'stopped' | 'failed' | 'completed';
 
-type SyncStatus = 'running' | 'idle' | 'failed' | 'completed';
-
-interface SyncState {
+export interface SyncState {
   status: SyncStatus;
   processed: number;
   total: number;
@@ -19,35 +17,52 @@ interface SyncState {
   job_id?: string;
   error_message?: string;
   source_url?: string;
+  stopping?: boolean; // Stop was requested and the job is winding down
 }
 
-interface ResumeFrom {
-  token: string | null;
-  processed: number;
+// Thrown by sync()/resume() while another import runs; the router answers 409.
+export class SyncBusyError extends Error {
+  constructor() {
+    super('An import is already running. Stop it first.');
+  }
+}
+
+// Above the proxies' own worst case (3 tries x 45 s + 28 s backoff), so a slow-but-alive source
+// still gets through while a hung one fails instead of blocking the job forever.
+const FETCH_TIMEOUT_MS = 180_000;
+
+const IDLE: SyncState = { status: 'idle', processed: 0, total: 0, current_prefix: '' };
+
+interface HarvestJob {
+  id: string;
+  url: string;
+  prefix: string;
+  limit: number;
+  batchSize: number;
+  sleepMs: number;
+  token: string | null;  // null = start from the first page
+  validated: boolean;    // the first page already passed checkRecord (a resumed job that wrote data)
+  overwrite: boolean;    // purge the label's old data, but only once the first page has passed
 }
 
 export class SyncOrchestrator {
-  private validator = new HandshakeValidator();
   private prefixer = new PrefixingService();
   private extractor = new RelationExtractor();
   private writer: GraphWriter;
-  private db: Database;
+  private state: SyncState = { ...IDLE };
+  // One controller per job: stop() aborts its in-flight page fetch and the pause between batches.
+  private abort: AbortController | null = null;
 
-  private state: SyncState = {
-    status: 'idle',
-    processed: 0,
-    total: 0,
-    current_prefix: '',
-  };
-  private abortSignal = false;
-
-  constructor(db: Database) {
-    this.db = db;
+  constructor(private db: Database) {
     this.writer = new GraphWriter(db);
     // On every startup, any SyncLog still marked 'running' is a crash remnant — mark it failed.
     this._cleanupOrphanedJobs().catch(err =>
       console.error('[SyncOrchestrator] Failed to clean up orphaned jobs:', err)
     );
+  }
+
+  private get logs() {
+    return this.db.collection('SyncLogs');
   }
 
   private async _cleanupOrphanedJobs(): Promise<void> {
@@ -66,10 +81,10 @@ export class SyncOrchestrator {
     return this.state;
   }
 
-  // Clears stale in-memory state so /sync/status doesn't surface a deleted job once SyncLogs is empty.
+  // Clears in-memory state, e.g. so /sync/status doesn't surface a deleted job once SyncLogs is empty.
   public resetState(): void {
-    this.state = { status: 'idle', processed: 0, total: 0, current_prefix: '' };
-    this.abortSignal = false;
+    this.state = { ...IDLE };
+    this.abort = null;
   }
 
   public async getLastJobStatus(): Promise<SyncState> {
@@ -82,8 +97,7 @@ export class SyncOrchestrator {
       `);
       if (cursor.hasNext) {
         const log = await cursor.next();
-        // A 'running' entry from DB means the previous process crashed before it could finalize.
-        // Never surface this as 'running' — nothing is actually running in this process.
+        // A 'running' entry while nothing runs in this process means the previous process crashed.
         const status: SyncStatus = log.status === 'running' ? 'failed' : log.status;
         return {
           status,
@@ -101,11 +115,11 @@ export class SyncOrchestrator {
     return this.state;
   }
 
-  // Removes every trace of a source by prefix. Data collections first, SyncLogs last, so a
-  // partial failure leaves the source still listed and the call safe to retry (idempotent).
-  // 6 sequential removes, not a DB transaction; wrap in db.beginTransaction if a
+  // Removes every trace of a source by prefix (except the job doing an overwrite, if given). Data
+  // collections first, SyncLogs last, so a partial failure leaves the source listed and the call
+  // safe to retry. 6 sequential removes, not a DB transaction; wrap in db.beginTransaction if a
   // half-deleted source ever shows up in practice.
-  public async purgeSource(prefix: string): Promise<void> {
+  public async purgeSource(prefix: string, keepJobId = ''): Promise<void> {
     const targetCollections = ['Dataset', 'Author', 'Keywords', 'HasAuthor', 'HasKeyword'];
     for (const col of targetCollections) {
       await this.db.query(
@@ -113,67 +127,23 @@ export class SyncOrchestrator {
         { '@col': col, prefix }
       );
     }
-    await this.db.query(`FOR log IN SyncLogs FILTER log.prefix == @prefix REMOVE log IN SyncLogs`, { prefix });
-  }
-
-  public async checkDatasetExists(prefix: string): Promise<boolean> {
-    const cursor = await this.db.query(
-      `FOR log IN SyncLogs FILTER log.prefix == @prefix LIMIT 1 RETURN log`,
-      { prefix }
+    await this.db.query(
+      `FOR log IN SyncLogs FILTER log.prefix == @prefix AND log._key != @keep REMOVE log IN SyncLogs`,
+      { prefix, keep: keepJobId }
     );
-    return cursor.hasNext;
   }
 
   public stop(): void {
-    if (this.state.status === 'running') {
-      this.abortSignal = true;
-    }
+    if (this.state.status !== 'running' || !this.abort) return;
+    this.state.stopping = true;
+    this.abort.abort();
   }
 
-  public async resume(jobId: string): Promise<string> {
-    if (this.state.status === 'running') {
-      throw new Error('[SyncOrchestrator] A sync is already running.');
-    }
-
-    const cursor = await this.db.query(
-      `FOR log IN SyncLogs FILTER log._key == @key LIMIT 1 RETURN log`,
-      { key: jobId }
-    );
-    if (!cursor.hasNext) throw new Error(`Job ${jobId} not found in SyncLogs.`);
-    const log = await cursor.next();
-
-    if (log.status === 'running') throw new Error('Job is already running.');
-
-    const syncLogsCol = this.db.collection('SyncLogs');
-    await syncLogsCol.update(jobId, { status: 'running', error_message: null });
-
-    this.state = {
-      status: 'running',
-      processed: log.count_success ?? 0,
-      total: log.total_limit ?? log.count_success ?? 0,
-      current_prefix: log.prefix,
-      job_id: jobId,
-      source_url: log.source_url,
-    };
-    this.abortSignal = false;
-
-    this._runSyncBackground(
-      jobId,
-      log.source_url,
-      log.prefix,
-      log.total_limit ?? log.count_success ?? 0,
-      log.batch_size ?? 100,
-      log.inter_batch_sleep_ms ?? 1000,
-      syncLogsCol,
-      { token: log.resume_token ?? null, processed: log.count_success ?? 0 }
-    ).catch(err => console.error('[SyncOrchestrator] Background resume critically failed:', err));
-
-    return jobId;
-  }
-
-  private async fetchBatch(url: string, params: Record<string, any>): Promise<any> {
-    // Retry logic for upstream sources lives in each proxy — no double-retry here.
-    return axios.get(url, { params });
+  // Marks a job as running *before* any await, so two near-simultaneous requests can't both start one.
+  private claim(next: Partial<SyncState>): void {
+    if (this.state.status === 'running') throw new SyncBusyError();
+    this.state = { ...IDLE, ...next, status: 'running' };
+    this.abort = new AbortController();
   }
 
   public async sync(
@@ -185,155 +155,140 @@ export class SyncOrchestrator {
     interBatchSleepMs = 1000,
     ui_config: Record<string, any> = {}
   ): Promise<string> {
-    if (this.state.status === 'running') {
-      throw new Error('[SyncOrchestrator] A sync is already running.');
+    this.claim({ total: limit, current_prefix: prefix, source_url: url });
+    let id: string;
+    try {
+      const doc = await this.logs.save({
+        source_url: url,
+        prefix,
+        status: 'running',
+        count_success: 0,
+        count_failure: 0,
+        total_limit: limit,
+        batch_size: batchSize,
+        inter_batch_sleep_ms: interBatchSleepMs,
+        start_time: new Date().toISOString(),
+        resume_token: null,
+        ui_config,
+      });
+      id = doc._key;
+    } catch (err) {
+      this.resetState();
+      throw err;
     }
+    this.state.job_id = id;
+    this.start({ id, url, prefix, limit, batchSize, sleepMs: interBatchSleepMs, token: null, validated: false, overwrite });
+    return id;
+  }
 
-    if (overwrite) {
-      console.log(`\x1b[33m[SyncOrchestrator] Overwrite is TRUE. Purging existing records for prefix '${prefix}'...\x1b[0m`);
-      await this.purgeSource(prefix);
+  public async resume(jobId: string): Promise<string> {
+    this.claim({ job_id: jobId });
+    let job: HarvestJob;
+    try {
+      const cursor = await this.db.query(
+        `FOR log IN SyncLogs FILTER log._key == @key LIMIT 1 RETURN log`,
+        { key: jobId }
+      );
+      if (!cursor.hasNext) throw new Error(`Job ${jobId} not found.`);
+      const log = await cursor.next();
+      await this.logs.update(jobId, { status: 'running', error_message: null, end_time: null });
+
+      const processed = log.count_success ?? 0;
+      const limit = log.total_limit ?? processed;
+      this.state = { ...this.state, processed, total: limit, current_prefix: log.prefix, source_url: log.source_url };
+      job = {
+        id: jobId,
+        url: log.source_url,
+        prefix: log.prefix,
+        limit,
+        batchSize: log.batch_size ?? 100,
+        sleepMs: log.inter_batch_sleep_ms ?? 1000,
+        token: log.resume_token ?? null,
+        validated: processed > 0, // a job that never wrote anything re-checks its first page
+        overwrite: false,
+      };
+    } catch (err) {
+      this.resetState();
+      throw err;
     }
-
-    const syncLogsCol = this.db.collection('SyncLogs');
-    const logDoc = await syncLogsCol.save({
-      source_url: url,
-      prefix,
-      status: 'running',
-      count_success: 0,
-      count_failure: 0,
-      total_limit: limit,
-      batch_size: batchSize,
-      inter_batch_sleep_ms: interBatchSleepMs,
-      start_time: new Date().toISOString(),
-      resume_token: null,
-      ui_config,
-    });
-
-    const jobId = logDoc._key;
-    this.state = { status: 'running', processed: 0, total: limit, current_prefix: prefix, job_id: jobId };
-    this.abortSignal = false;
-
-    // Fire-and-forget: return the job ID immediately while the sync runs in the background.
-    this._runSyncBackground(jobId, url, prefix, limit, batchSize, interBatchSleepMs, syncLogsCol, null).catch(err =>
-      console.error('[SyncOrchestrator] Background job critically failed:', err)
-    );
-
+    this.start(job);
     return jobId;
   }
 
-  private async _runSyncBackground(
-    jobId: string,
-    url: string,
-    prefix: string,
-    limit: number,
-    batchSize: number,
-    interBatchSleepMs: number,
-    syncLogsCol: any,
-    resumeFrom: ResumeFrom | null,
-  ): Promise<void> {
-    if (SKIP_PREFIXING_TEST_MODE) {
-      console.warn('\x1b[33m[SyncOrchestrator] *** TEST MODE ACTIVE: Prefixing logic will be skipped entirely. ***\x1b[0m');
+  // Fire-and-forget: the caller gets the job ID right away; harvest() records its own outcome.
+  private start(job: HarvestJob): void {
+    const signal = this.abort!.signal;
+    this.harvest(job, signal).catch(err =>
+      console.error(`[SyncOrchestrator] Job ${job.id}: could not record its outcome:`, err)
+    );
+  }
+
+  private async fetchPage(url: string, limit: number, token: string | null, signal: AbortSignal) {
+    const params: Record<string, any> = { limit };
+    if (token) params.token = token;
+    const res = await axios.get(url, { params, signal, timeout: FETCH_TIMEOUT_MS });
+    const body = res.data;
+    // A proxy answers either IDataAdapter[] (+ X-Next-Token header) or a { records, nextToken } envelope.
+    if (body && !Array.isArray(body) && Array.isArray(body.records)) {
+      return { records: body.records as IDataAdapter[], nextToken: (body.nextToken ?? null) as string | null };
     }
+    return {
+      records: (Array.isArray(body) ? body : [body]) as IDataAdapter[],
+      nextToken: (res.headers['x-next-token'] ?? null) as string | null,
+    };
+  }
 
-    if (!resumeFrom) {
-      console.log(`\x1b[36m[SyncOrchestrator] Initiating handshake with ${url}... (Job ID: ${jobId})\x1b[0m`);
-      const validationResult = await this.validator.validate(url);
-
-      if (!validationResult.valid) {
-        // Persist to DB first, then update in-memory — keeps the two sources consistent.
-        await syncLogsCol.update(jobId, {
-          status: 'failed',
-          error_message: `Handshake failed: ${validationResult.message}`,
-          end_time: new Date().toISOString(),
-        });
-        this.state.status = 'failed';
-        console.error(`\x1b[31m[SyncOrchestrator] Handshake failed: ${validationResult.message}\x1b[0m`);
-        return;
-      }
-      console.log(`\x1b[32m[SyncOrchestrator] Handshake successful. Beginning sync up to ${limit} records in batches of ${batchSize}.\x1b[0m`);
-    } else {
-      console.log(`\x1b[36m[SyncOrchestrator] Resuming job ${jobId} from record ${resumeFrom.processed}/${limit} (token: ${resumeFrom.token ?? 'none'}).\x1b[0m`);
-    }
-
-    let paginationToken: string | null = resumeFrom?.token ?? null;
-    let hasMoreData = true;
-    let batchNumber = 0;
-    const startTime = Date.now();
+  private async harvest(job: HarvestJob, signal: AbortSignal): Promise<void> {
+    const { id, url, prefix, limit, batchSize, sleepMs } = job;
+    let { token, validated } = job;
+    const started = Date.now();
+    console.log(`\x1b[36m[SyncOrchestrator] Job ${id}: harvesting up to ${limit} records from ${url}${token ? ' (resuming)' : ''}\x1b[0m`);
 
     try {
-      while (this.state.processed < limit && !this.abortSignal && hasMoreData) {
-        batchNumber++;
-        const params: Record<string, any> = { limit: batchSize };
-        if (paginationToken) params.token = paginationToken;
+      while (this.state.processed < limit) {
+        const { records, nextToken } = await this.fetchPage(url, batchSize, token, signal);
 
-        console.log(`\x1b[36m[SyncOrchestrator] Fetching batch ${batchNumber}...\x1b[0m`);
-        const response = await this.fetchBatch(url, params);
-
-        let records: IDataAdapter[];
-        let nextToken: string | null;
-
-        // Support both { records, nextToken } envelope and plain array responses.
-        if (response.data && !Array.isArray(response.data) && response.data.records) {
-          records = response.data.records;
-          nextToken = response.data.nextToken ?? null;
-        } else {
-          records = Array.isArray(response.data) ? response.data : [response.data];
-          nextToken = response.headers['x-next-token'] ?? null;
+        if (!validated) {
+          // The first page doubles as the handshake: check it before touching any existing data.
+          const problem = checkRecord(records[0]);
+          if (problem) throw new Error(problem);
+          validated = true;
+          if (job.overwrite) await this.purgeSource(prefix, id);
         }
+        if (records.length === 0) break; // source exhausted
 
-        if (records.length === 0) {
-          console.log(`\x1b[33m[SyncOrchestrator] Batch ${batchNumber} returned 0 records — source exhausted.\x1b[0m`);
-          hasMoreData = false;
-          break;
-        }
+        const take = records.slice(0, limit - this.state.processed);
+        await this.writer.writeBatch(take.map(r => this.extractor.extract(this.prefixer.applyPrefix(prefix, r))), prefix);
+        this.state.processed += take.length;
+        await this.logs.update(id, { count_success: this.state.processed, resume_token: nextToken });
 
-        const batchPayloads: GraphPayload[] = [];
+        const rps = (this.state.processed / Math.max(1, (Date.now() - started) / 1000)).toFixed(1);
+        console.log(`\x1b[35m[SyncOrchestrator] Job ${id}: ${this.state.processed}/${limit} records | ${rps} rec/s\x1b[0m`);
 
-        for (const record of records) {
-          if (this.state.processed >= limit || this.abortSignal) {
-            if (this.abortSignal) {
-              console.log(`\x1b[33m[SyncOrchestrator] Abort signal received mid-batch ${batchNumber}. Flushing ${batchPayloads.length} already-processed records...\x1b[0m`);
-            }
-            break;
-          }
-          const targetRecord = SKIP_PREFIXING_TEST_MODE ? record : this.prefixer.applyPrefix(prefix, record);
-          batchPayloads.push(this.extractor.extract(targetRecord));
-          this.state.processed++;
-        }
-
-        if (batchPayloads.length > 0) {
-          await this.writer.writeBatch(batchPayloads, prefix);
-          await syncLogsCol.update(jobId, { count_success: this.state.processed, resume_token: nextToken ?? null });
-          const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
-          const rps = (this.state.processed / ((Date.now() - startTime) / 1000)).toFixed(1);
-          const pct = Math.min(100, Math.floor((this.state.processed / limit) * 100));
-          console.log(`\x1b[35m[SyncOrchestrator] [Batch ${batchNumber}] ${this.state.processed}/${limit} records (${pct}%) | ${rps} rec/s | Elapsed: ${elapsedSec}s\x1b[0m`);
-        }
-
-        if (nextToken && !this.abortSignal && this.state.processed < limit) {
-          paginationToken = nextToken;
-          console.log(`\x1b[36m[SyncOrchestrator] Waiting ${interBatchSleepMs / 1000}s before next batch...\x1b[0m`);
-          await new Promise(r => setTimeout(r, interBatchSleepMs));
-        } else {
-          hasMoreData = false;
-        }
+        if (!nextToken) break;
+        token = nextToken;
+        if (this.state.processed < limit) await sleep(sleepMs, undefined, { signal });
       }
-
-      // Persist to DB before resetting in-memory state. If the order were reversed and the
-      // DB update failed, in-memory would show 'idle' while the DB still shows 'running' —
-      // which our startup cleanup would then misread as a crash on next restart.
-      const totalSec = ((Date.now() - startTime) / 1000).toFixed(1);
-      const avgRps = this.state.processed > 0
-        ? (this.state.processed / ((Date.now() - startTime) / 1000)).toFixed(1)
-        : '0';
-      await syncLogsCol.update(jobId, { status: 'completed', end_time: new Date().toISOString() });
-      this.state.status = 'completed';
-      console.log(`\x1b[32m[SyncOrchestrator] ✔ Sync complete — ${this.state.processed} records in ${totalSec}s (${avgRps} rec/s avg).\x1b[0m`);
+      await this.finish(id, 'completed');
     } catch (err: any) {
-      // Same ordering discipline: DB first, then in-memory.
-      await syncLogsCol.update(jobId, { status: 'failed', error_message: err.message, end_time: new Date().toISOString() });
-      this.state.status = 'failed';
-      console.error(`\x1b[31m[SyncOrchestrator] ✘ Sync failed on batch ${batchNumber} at record ${this.state.processed}/${limit}: ${err.message}\x1b[0m`);
+      // A stop aborts the in-flight fetch or the pause. The page being fetched is dropped and the
+      // stored resume_token still points at it, so Resume picks up exactly there.
+      if (signal.aborted) return this.finish(id, 'stopped');
+      const reason = describeFetchError(err);
+      await this.finish(id, 'failed', validated ? reason : `Handshake failed: ${reason}`);
+    }
+  }
+
+  // DB first, then memory. If the DB write fails, the row stays 'running' (the startup cleanup marks
+  // it failed later), but memory is always released so a new import can start.
+  private async finish(id: string, status: SyncStatus, error_message?: string): Promise<void> {
+    try {
+      await this.logs.update(id, { status, error_message: error_message ?? null, end_time: new Date().toISOString() });
+    } finally {
+      this.state = { ...this.state, status, error_message, stopping: false };
+      this.abort = null;
+      const colour = status === 'completed' ? 32 : status === 'stopped' ? 33 : 31;
+      console.log(`\x1b[${colour}m[SyncOrchestrator] Job ${id}: ${status} at ${this.state.processed}/${this.state.total}${error_message ? ` — ${error_message}` : ''}\x1b[0m`);
     }
   }
 }

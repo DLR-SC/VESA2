@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Typography, LinearProgress, Alert, Stack, useTheme } from '@mui/material';
+import { Box, Button, Typography, LinearProgress, Alert, AlertTitle, Stack, useTheme } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import ReplayIcon from '@mui/icons-material/Replay';
@@ -18,7 +18,11 @@ const SyncControl: React.FC<SyncControlProps> = ({ config, status }) => {
 	const [resumeSync, { isLoading: isResuming, error: resumeError }] = useResumeSyncMutation();
 
 	const isRunning = status?.status === 'running';
-	const isFailed = status?.status === 'failed' && !!status?.job_id;
+	// The backend keeps `stopping` set until the job has actually wound down.
+	const isStoppingNow = isStopping || !!status?.stopping;
+	// A stopped or failed job can be resumed from where it ended, or started over.
+	const isResumable = (status?.status === 'stopped' || status?.status === 'failed') && !!status?.job_id;
+	const isFailed = status?.status === 'failed';
 	const totalRecords = status?.total || config.limit || 1;
 	const processedRecords = status?.processed || 0;
 	const progress = (processedRecords / totalRecords) * 100;
@@ -56,21 +60,22 @@ const SyncControl: React.FC<SyncControlProps> = ({ config, status }) => {
 							startIcon={<StopIcon />}
 							size="small"
 							onClick={() => stopSync()}
-							disabled={isStopping}
+							disabled={isStoppingNow}
 							sx={{
 								mt: 2,
 								alignSelf: 'flex-start',
 								textTransform: 'none'
 							}}
 						>
-							{isStopping ? 'Stopping...' : 'Stop Import'}
+							{isStoppingNow ? 'Stopping...' : 'Stop Import'}
 						</Button>
 					</Stack>
-				) : isFailed ? (
+				) : isResumable ? (
 					<Stack spacing={1.5}>
-						<Alert severity="warning" variant="outlined" sx={{ borderRadius: 1 }}>
-							Import stopped at {processedRecords} of {totalRecords} records.
-							{status?.error_message && ` Error: ${status.error_message}`}
+						<Alert severity={isFailed ? 'error' : 'warning'} variant="outlined" sx={{ borderRadius: 1 }}>
+							<AlertTitle>{isFailed ? 'Import failed' : 'Import stopped'}</AlertTitle>
+							{processedRecords} of {totalRecords} records imported.
+							{isFailed && ` ${status?.error_message || 'The import failed.'}`}
 						</Alert>
 						<Stack direction="row" spacing={1.5}>
 							<Button

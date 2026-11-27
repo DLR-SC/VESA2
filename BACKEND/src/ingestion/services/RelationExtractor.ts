@@ -1,12 +1,23 @@
+import { createHash } from 'crypto';
 import { IDataAdapter, IDataset, IAuthor, IKeyword } from '../contracts/IDataAdapter';
+
+type Edge = { _key: string; _from: string; _to: string };
 
 export interface GraphPayload {
   dataset: IDataset & { _key: string };
   authors: (IAuthor & { _key: string })[];
   keywords: (IKeyword & { _key: string })[];
-  edgesHasAuthor: { _from: string; _to: string }[];
-  edgesHasKeyword: { _from: string; _to: string }[];
+  edgesHasAuthor: Edge[];
+  edgesHasKeyword: Edge[];
 }
+
+// Deterministic edge _key: GraphWriter saves edges with overwriteMode "ignore", which only skips a
+// document whose _key already exists, so re-imports and resumes upsert instead of duplicating.
+const edge = (_from: string, _to: string): Edge => ({
+  _key: createHash('sha1').update(`${_from}|${_to}`).digest('hex'),
+  _from,
+  _to,
+});
 
 export class RelationExtractor {
   private slugify(text: string): string {
@@ -33,15 +44,8 @@ export class RelationExtractor {
         _key: this.slugify(k.id || ""),
       }));
 
-      const edgesHasAuthor = authors.map(a => ({
-        _from: `Dataset/${dsKey}`,
-        _to: `Author/${a._key}`
-      }));
-
-      const edgesHasKeyword = keywords.map(k => ({
-        _from: `Dataset/${dsKey}`,
-        _to: `Keywords/${k._key}`
-      }));
+      const edgesHasAuthor = authors.map(a => edge(`Dataset/${dsKey}`, `Author/${a._key}`));
+      const edgesHasKeyword = keywords.map(k => edge(`Dataset/${dsKey}`, `Keywords/${k._key}`));
 
       return {
         dataset: datasetNode,

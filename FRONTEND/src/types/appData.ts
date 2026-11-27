@@ -125,7 +125,8 @@ export interface IContainerProps {
 }
 
 export interface ISyncState {
-  status: "running" | "idle" | "failed" | "completed";
+  status: "idle" | "running" | "stopped" | "failed" | "completed";
+  stopping?: boolean; // Stop was requested; the job is winding down
   processed: number;
   total: number;
   current_prefix: string;
@@ -133,19 +134,6 @@ export interface ISyncState {
   error_message?: string;
   target_url?: string;
   source_url?: string;
-}
-
-export interface ISyncValidateRequest {
-  target_url: string;
-  dataset_id: string;
-  overwrite?: boolean;
-}
-
-export interface ISyncValidateResponse {
-  valid: boolean;
-  reason?: string;
-  message?: string;
-  originalStatus?: number;
 }
 
 export interface ISyncStartRequest {
@@ -181,6 +169,7 @@ export interface ISyncHistoryEntry {
   prefix: string;
   source_url: string;
   count_success: number;
+  status: ISyncState["status"]; // anything but "completed" means the data is partial
   start_time: string;
   end_time: string;
   ui_config: Record<string, any>;

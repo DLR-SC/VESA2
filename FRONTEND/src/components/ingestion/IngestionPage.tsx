@@ -17,7 +17,6 @@ const IngestionPage: React.FC = () => {
 	const [stagingConfig, setStagingConfig] = useState<StagingConfig | null>(null);
 	const [config, setConfig] = useState<{ url: string; prefix: string; limit: number; color: string; batchDelay: number; overwrite?: boolean } | null>(null);
 	const [activeStep, setActiveStep] = useState(0);
-	const [errorMsg, setErrorMsg] = useState<string | null>(null);
 	const [ignoredJobId, setIgnoredJobId] = useState<string | null>(() => localStorage.getItem('ignoredJobId'));
 
 	const { data: syncStatus, isSuccess } = useGetSyncStatusQuery(undefined, { pollingInterval: 2000 });
@@ -32,40 +31,22 @@ const IngestionPage: React.FC = () => {
 		setStagingConfig(null);
 		setConfig(null);
 		setActiveStep(0);
-		setErrorMsg(null);
 	};
 
+	// The polled job status decides the step: running/stopped/failed -> Import (SyncControl shows
+	// progress, or Resume / Start Over), completed -> Analyze. A job the user has Reset stays ignored,
+	// so its outcome can't pull the page back; idle (no job yet) leaves the user where they are.
 	useEffect(() => {
 		if (!isSuccess || !syncStatus) return;
-		const { status, processed, total, current_prefix, error_message, job_id } = syncStatus;
-		const url = syncStatus.target_url || syncStatus.source_url || '';
-		const isCompleted = status === 'completed' || (status === 'idle' && processed > 0 && processed === total);
-		const isStopped = status === 'idle' && processed > 0 && processed < total;
+		const { status, total, current_prefix, job_id } = syncStatus;
+		if (status === 'idle' || (status !== 'running' && job_id === ignoredJobId)) return;
 
-		if (status === 'running') {
-			if (activeStep !== 2) {
-				setConfig((prev) => ({ url, prefix: current_prefix, limit: total, color: prev?.color ?? '#543CF0', batchDelay: prev?.batchDelay ?? 1000 }));
-				setActiveStep(2);
-			}
-			setErrorMsg(null);
-		} else if (isCompleted && job_id !== ignoredJobId) {
-			if (activeStep !== 3) {
-				setConfig((prev) => ({ url, prefix: current_prefix, limit: total, color: prev?.color ?? '#543CF0', batchDelay: prev?.batchDelay ?? 1000 }));
-				setActiveStep(3);
-				refetchHistory();
-			}
-			setErrorMsg(null);
-		} else if ((isStopped || status === 'failed') && job_id !== ignoredJobId) {
-			// A stopped or failed job stays on the Import step (Resume / Start Over / Reset) until the
-			// user resets it; Reset ignores that job_id, so the next status poll can't bring the error back.
-			if (activeStep !== 2) {
-				setConfig((prev) => ({ url, prefix: current_prefix, limit: total, color: prev?.color ?? '#543CF0', batchDelay: prev?.batchDelay ?? 1000 }));
-				setActiveStep(2);
-			}
-			setErrorMsg(status === 'failed'
-				? error_message || 'The previous synchronization process failed.'
-				: `Synchronization stopped. Processed ${processed} of ${total} records. Please start a New Import.`);
-		}
+		const step = status === 'completed' ? 3 : 2;
+		if (activeStep === step) return;
+		const url = syncStatus.target_url || syncStatus.source_url || '';
+		setConfig((prev) => ({ url, prefix: current_prefix, limit: total, color: prev?.color ?? '#543CF0', batchDelay: prev?.batchDelay ?? 1000 }));
+		setActiveStep(step);
+		if (step === 3) refetchHistory();
 	}, [isSuccess, syncStatus, activeStep, ignoredJobId]);
 
 	return (
@@ -103,12 +84,6 @@ const IngestionPage: React.FC = () => {
 							</Step>
 						))}
 					</Stepper>
-
-					{errorMsg && (
-						<Alert severity="error" sx={{ mb: 2 }}>
-							{errorMsg}
-						</Alert>
-					)}
 
 					<Box sx={{ minHeight: 300, display: 'flex', flexDirection: 'column' }}>
 						{activeStep === 0 && (
